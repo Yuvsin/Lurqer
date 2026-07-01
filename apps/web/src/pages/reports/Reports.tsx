@@ -1,5 +1,6 @@
 import { NavBar } from "@/components/NavBar";
 import { ReportsTable } from "./ReportsTable";
+import type { Job } from "@/types/Job";
 
 //Reports — this is where individual risk reports live (the findings panel 
 //you saw in the mockup, evidence + severity for a specific application), plus 
@@ -8,12 +9,25 @@ import { ReportsTable } from "./ReportsTable";
 //also a natural home for your evaluation/methodology data if you want
 //a public-facing "how detection works" page later.
 
-export function Reports() {
+type ReportsProps = {
+  jobs: Job[];
+  loadJobs: () => Promise<void>;
+};
+
+export function Reports({jobs, loadJobs} : ReportsProps) {
   return (
     <>
-      <NavBar />
-      <ReportsTable />
+      <NavBar/>
+      <div className="mx-auto max-w-5xl px-6 py-8">
+
+        <h1 className="text-2xl font-semibold text-[#131200]">
+          Reports
+        </h1>
+
+        <ReportsTable jobs={jobs} loadJobs={loadJobs}/>
+      </div>
     </>
+
 
   );
 }

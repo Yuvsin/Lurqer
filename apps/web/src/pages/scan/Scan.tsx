@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 
 const placeholders = [
-  "www.indeed.com/viewjob...", "www.linkedin.com/jobs...", 
+  "www.indeed.com/viewjob...", "www.linkedin.com/jobs...",
   "www.joinhandshake.com/jobs/...", "www.ziprecruiter.com/jobs..."];
 
 export function Scan() {
@@ -20,6 +20,7 @@ export function Scan() {
 
   return (
     <>
+      <title>Lurqer - Scan</title>
       <NavBar />
 
       <div className="max-w-2xl mx-auto px-6 py-6">
@@ -36,7 +37,7 @@ export function Scan() {
           </label>
           <div className="flex gap-3">
             <input type="url" placeholder={placeholders[placeholderIndex]}
-            className="flex-1 px-3 py-2 text-sm rounded-lg border border-[#9A98B5] bg-white text-[#131200] 
+              className="flex-1 px-3 py-2 text-sm rounded-lg border border-[#9A98B5] bg-white text-[#131200] 
             placeholder:text-[#9A98B5] focus:outline-none focus:ring-2 focus:ring-[#392061] focus:border-transparent"
             />
             <Button className="bg-[#392061] hover:bg-[#2a1648] text-[#FAF0CA] px-5 rounded-lg text-sm">

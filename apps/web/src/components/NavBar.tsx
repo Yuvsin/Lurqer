@@ -1,41 +1,41 @@
 import { NavLink } from "react-router";
 import ghostLogo from "../assets/ghostLogo.png";
 
+const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+  `text-sm font-medium transition-colors ${isActive
+    ? "text-[#FAF0CA]"
+    : "text-[#C4B8E0] hover:text-[#FAF0CA]"
+  }`;
+
 export function NavBar() {
   return (
-    <div className="bg-[#392061] w-full h-16 flex items-center px-7">
-
-      <div className="flex items-center gap-2">
-        <img src={ghostLogo} alt="LurqerGhostLogo" className="h-8 w-auto" />
-        <span className="text-[#FAF0CA] font-bold">Lurqer</span>
-      </div>
-
-      <div className="flex-1 flex justify-center gap-8">
-        <NavLink to="/"
-          className={({ isActive }) =>
-            `text-sm font-medium transition-colors 
-            ${isActive ? "text-[#FAF0CA]" : "text-[#C4B8E0] hover:text-[#FAF0CA]"
-            }`}>
-          Home
+    <header className="h-16 w-full bg-[#392061] px-7">
+      <nav className="grid h-full grid-cols-3 items-center">
+        <NavLink to="/" end className="flex items-center gap-2">
+          <img
+            src={ghostLogo}
+            alt="Lurqer ghost logo"
+            className="h-8 w-auto"
+          />
+          <span className="font-bold text-[#FAF0CA]">Lurqer</span>
         </NavLink>
 
-        <NavLink to="/scan"
-        className={({ isActive }) =>
-            `text-sm font-medium transition-colors 
-            ${isActive ? "text-[#FAF0CA]" : "text-[#C4B8E0] hover:text-[#FAF0CA]"
-            }`}>
-          Scan
-        </NavLink>
+        <div className="flex justify-center gap-8">
+          <NavLink to="/" end className={navLinkClass}>
+            Home
+          </NavLink>
 
-        <NavLink to="/reports"
-        className={({ isActive }) =>
-            `text-sm font-medium transition-colors 
-            ${isActive ? "text-[#FAF0CA]" : "text-[#C4B8E0] hover:text-[#FAF0CA]"
-            }`}>
-          Reports
-        </NavLink>
-      </div>
-      <div className="w-24" />
-    </div>
+          <NavLink to="/scan" className={navLinkClass}>
+            Scan
+          </NavLink>
+
+          <NavLink to="/reports" className={navLinkClass}>
+            Reports
+          </NavLink>
+        </div>
+
+        <div className="flex justify-end" />
+      </nav>
+    </header>
   );
 }
