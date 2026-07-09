@@ -1,67 +1,74 @@
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { Job } from "@/types/Job";
 
-export function Analytics() {
+type AnalyticsProps = {
+  jobs: Job[];
+};
+
+export function Analytics({ jobs }: AnalyticsProps) {
+  const active = jobs.filter(j => ["Applied", "Screening", "Interview"].includes(j.status)).length;
+  const needsAttention = jobs.filter(
+    j =>
+      j.riskLevel === "Medium" ||
+      j.riskLevel === "High" ||
+      j.status === "No response" ||
+      j.status === "Ghosted"
+  ).length;
+  const interviewing = jobs.filter(j => j.status === "Interview").length;
+  const ghosted = jobs.filter(j => j.status === "Ghosted" || j.status === "No response").length;
+
   return (
-    <section className="m-10">
-      <div className="grid grid-cols-2 gap-5">
-        <Card className="border-[#ECE7D8] bg-[#F2F0EC] shadow-sm">
-          <CardHeader className="pb-2">
+    <section className="py-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+
+        <Card className="border-[#ECE7D8] bg-[#F2F0EC] shadow-none">
+          <CardHeader className="px-4 pt-4 pb-1">
             <CardTitle className="text-sm font-medium text-[#5B5750]">
-              Total Jobs Scanned
+              Active applications
             </CardTitle>
           </CardHeader>
-
-          <CardContent>
-            <div className="flex items-end justify-between">
-              <div>
-                <p className="text-4xl font-bold tracking-tight text-[#131200]">
-                  20
-                </p>
-                <p className="mt-1 text-sm text-[#5B5750]">
-                  Job postings analyzed by Lurqer
-                </p>
-              </div>
-            </div>
+          <CardContent className="px-4 pb-4">
+            <p className="text-3xl font-bold tracking-tight text-[#131200]">{active}</p>
+            <p className="text-xs text-[#5B5750] mt-0.5">Applied, screening, or interviewing</p>
           </CardContent>
         </Card>
 
-        <Card className="border-[#ECE7D8] bg-[#F2F0EC] shadow-sm">
-          <CardHeader className="pb-2">
+        <Card className="border-[#ECE7D8] bg-[#F2F0EC] shadow-none">
+          <CardHeader className="px-4 pt-4 pb-1">
             <CardTitle className="text-sm font-medium text-[#5B5750]">
-              Unsafe Job Signals
+              Needs attention
             </CardTitle>
           </CardHeader>
-
-          <CardContent>
-            <div className="flex items-end justify-between">
-              <div>
-                <p className="text-4xl font-bold tracking-tight text-[#B0212B]">
-                  SOMETHING
-                </p>
-                <p className="mt-1 text-sm text-[#5B5750]">
-                  Jobs marked as medium or high risk
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-5 rounded-lg border border-[#ECE7D8] bg-[#FAF9F6] p-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-[#5B5750]">
-                Most common flag:
-              </p>
-              <p className="mt-1 text-sm font-semibold text-[#131200]">
-                Suspicious application link
-              </p>
-              <p className="mt-1 text-xs text-[#5B5750]">
-                Several postings redirected away from the company domain.
-              </p>
-            </div>
+          <CardContent className="px-4 pb-4">
+            <p className="text-3xl font-bold tracking-tight text-[#B0212B]">{needsAttention}</p>
+            <p className="text-xs text-[#5B5750] mt-0.5">Flagged risk or no reply yet</p>
           </CardContent>
         </Card>
+
+        <Card className="border-[#ECE7D8] bg-[#F2F0EC] shadow-none">
+          <CardHeader className="px-4 pt-4 pb-1">
+            <CardTitle className="text-sm font-medium text-[#5B5750]">
+              Interviewing
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <p className="text-3xl font-bold tracking-tight text-[#392061]">{interviewing}</p>
+            <p className="text-xs text-[#5B5750] mt-0.5">Applications in interview stage</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-[#ECE7D8] bg-[#F2F0EC] shadow-none">
+          <CardHeader className="px-4 pt-4 pb-1">
+            <CardTitle className="text-sm font-medium text-[#5B5750]">
+              Ghosted
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <p className="text-3xl font-bold tracking-tight text-[#8A5A0A]">{ghosted}</p>
+            <p className="text-xs text-[#5B5750] mt-0.5">Ghosted or no response</p>
+          </CardContent>
+        </Card>
+
       </div>
     </section>
   );
