@@ -128,5 +128,36 @@
 
   html {
     @apply font-sans;
+    overflow-y: scroll;
+    scrollbar-width: thin;
+    scrollbar-color: #6f5198 #25133f;
+  }
+
+  ::-webkit-scrollbar {
+    width: 11px;
+    height: 11px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #25133f;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    min-height: 48px;
+    border: 2px solid #25133f;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #8f73ba 0%, #6f5198 45%, #4a2b73 100%);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #a58bcc 0%, #8061ab 45%, #5a3784 100%);
+  }
+
+  ::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(180deg, #c4b8e0 0%, #8061ab 55%, #392061 100%);
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: #25133f;
   }
 }

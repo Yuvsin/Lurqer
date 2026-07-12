@@ -62,7 +62,7 @@ export function FilterTable({
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger render={<Button variant="outline" />}>
-                {activeSort ? `Sort: ${activeSort} (${directionLabel})` : `Sort (${directionLabel})`}
+                Sort
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 <DropdownMenuGroup>

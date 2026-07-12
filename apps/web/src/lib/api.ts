@@ -1,11 +1,33 @@
-const API_URL = import.meta.env.VITE_API_URL;
+import axios from "axios";
+import type { Job } from "@/types/Job";
 
-export async function getHealth() {
-  const response = await fetch(`${API_URL}/health`);
+export const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL,
+});
 
-  if (!response.ok) {
-    throw new Error("Failed to connect to backend");
-  }
+export async function getJobs(): Promise<Job[]> {
+  const response = await api.get<Job[]>("/jobs");
+  return response.data;
+}
 
-  return response.json();
+export async function getJob(jobId: string): Promise<Job> {
+  const response = await api.get<Job>(`/jobs/${jobId}`);
+  return response.data;
+}
+
+export async function createJob(job: Job): Promise<Job> {
+  const response = await api.post<Job>("/jobs", job);
+  return response.data;
+}
+
+export async function updateJob(
+  jobId: string,
+  job: Job
+): Promise<Job> {
+  const response = await api.put<Job>(`/jobs/${jobId}`, job);
+  return response.data;
+}
+
+export async function deleteJob(jobId: string): Promise<void> {
+  await api.delete(`/jobs/${jobId}`);
 }
