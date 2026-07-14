@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from app.schemas.common import RiskLevel
+from backend.app.schemas.common import RiskLevel
 from enum import Enum
 
 class ScanSource(str, Enum):
