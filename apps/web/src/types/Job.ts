@@ -22,7 +22,7 @@ export interface CategoryScores {
 }
 
 export interface Job {
-  id:           number;
+  id:           string;
   company:      string;
   title:        string;
   platform:     string;

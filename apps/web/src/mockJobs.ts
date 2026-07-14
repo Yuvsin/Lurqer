@@ -2,7 +2,7 @@ import type { Job } from "./types/Job";
 
 export const mockJobs: Job[] = [
   {
-    id: 1,
+    id: "1",
     company: "Google",
     title: "Software Engineer Intern",
     platform: "LinkedIn",
@@ -11,7 +11,7 @@ export const mockJobs: Job[] = [
     status: "Screening",
   },
   {
-    id: 2,
+    id: "2",
     company: "CloudNest",
     title: "Cybersecurity Analyst Intern",
     platform: "Handshake",
@@ -20,7 +20,7 @@ export const mockJobs: Job[] = [
     status: "No response",
   },
   {
-    id: 3,
+    id: "3",
     company: "BrightTech",
     title: "Frontend Developer Intern",
     platform: "Indeed",
@@ -76,7 +76,7 @@ export const mockJobs: Job[] = [
     ],
   },
   {
-    id: 4,
+    id: "4",
     company: "Poop",
     title: "Frontend Developer Intern",
     platform: "Handshake",
@@ -85,7 +85,7 @@ export const mockJobs: Job[] = [
     status: "Ghosted",
   },
   {
-    id: 5,
+    id: "5",
     company: "Poop",
     title: "Backend Developer Intern",
     platform: "Glassdoor",
@@ -94,7 +94,7 @@ export const mockJobs: Job[] = [
     status: "Interview",
   },
   {
-    id: 6,
+    id: "6",
     company: "Poop",
     title: "Backend Developer Intern",
     platform: "Glassdoor",
@@ -103,7 +103,7 @@ export const mockJobs: Job[] = [
     status: "Applied",
   },
   {
-    id: 7,
+    id: "7",
     company: "Poop",
     title: "Backend Developer Intern",
     platform: "Glassdoor",
@@ -112,7 +112,7 @@ export const mockJobs: Job[] = [
     status: "Offer",
   },
   {
-    id: 8,
+    id: "8",
     company: "Poop",
     title: "Backend Developer Intern",
     platform: "Glassdoor",
@@ -121,7 +121,7 @@ export const mockJobs: Job[] = [
     status: "Rejected",
   },
   {
-    id: 9,
+    id: "9",
     company: "Poop",
     title: "Backend Developer Intern",
     platform: "Glassdoor",
@@ -130,7 +130,7 @@ export const mockJobs: Job[] = [
     status: "Screening",
   },
   {
-    id: 10,
+    id: "10",
     company: "Poop",
     title: "Backend Developer Intern",
     platform: "Glassdoor",
@@ -139,7 +139,7 @@ export const mockJobs: Job[] = [
     status: "Applied",
   },
   {
-    id: 11,
+    id: "11",
     company: "Fah",
     title: "Backend Developer Intern",
     platform: "Glassdoor",
@@ -148,7 +148,7 @@ export const mockJobs: Job[] = [
     status: "No response",
   },
   {
-    id: 12,
+    id: "12",
     company: "Fah",
     title: "Backend Developer Intern",
     platform: "Glassdoor",

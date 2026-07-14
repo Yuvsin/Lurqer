@@ -6,12 +6,11 @@ import { JobTableRow } from "./JobTableRow";
 
 type JobTableProps = {
   jobs: Job[];
-  loadJobs: () => Promise<void>;
 };
 
 const PAGE_SIZE = 10;
 
-export function JobTable({ jobs, loadJobs }: JobTableProps) {
+export function JobTable({ jobs }: JobTableProps) {
   const [page, setPage] = useState(0);
 
   const totalPages = Math.ceil(jobs.length / PAGE_SIZE);
@@ -35,7 +34,7 @@ export function JobTable({ jobs, loadJobs }: JobTableProps) {
           </TableHeader>
           <TableBody>
             {paginated.map((job) => (
-              <JobTableRow key={job.id} job={job} loadJobs={loadJobs} />
+              <JobTableRow key={job.id} job={job} />
             ))}
           </TableBody>
         </Table>

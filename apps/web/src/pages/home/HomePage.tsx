@@ -4,10 +4,12 @@ import { FilterTable, type ApplicationFilter, type ApplicationSort, type SortDir
 import { JobTable } from "./JobTable";
 import { Analytics } from "./Analytics";
 import type { Job } from "@/types/Job";
+import { Button } from "@/components/ui/button";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { createJob } from "@/lib/api";
 
 type HomePageProps = {
   jobs: Job[];
-  loadJobs: () => Promise<void>;
 };
 
 const activeStatuses: Job["status"][] = ["Applied", "Screening", "Interview"];
@@ -23,10 +25,20 @@ const statusRank: Record<Job["status"], number> = {
   "No response": 7,
 };
 
-export function HomePage({ jobs, loadJobs }: HomePageProps) {
+export function HomePage({ jobs }: HomePageProps) {
   const [activeFilter, setActiveFilter] = useState<ApplicationFilter>("All");
   const [activeSort, setActiveSort] = useState<ApplicationSort>();
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const queryClient = useQueryClient();
+  const createJobMutation = useMutation({
+    mutationFn: createJob,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    },
+    onError: (error) => {
+      console.error("Failed to create job:", error);
+    },
+  });
 
   const filteredJobs = useMemo(() => {
     const visibleJobs = (() => {
@@ -83,7 +95,7 @@ export function HomePage({ jobs, loadJobs }: HomePageProps) {
           onSortChange={setActiveSort}
           onSortDirectionChange={setSortDirection}
         />
-        <JobTable jobs={filteredJobs} loadJobs={loadJobs} />
+        <JobTable jobs={filteredJobs} />
       </div >
     </>
   );

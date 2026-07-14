@@ -1,0 +1,342 @@
+.loading-page {
+  position: relative;
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  overflow: hidden;
+  isolation: isolate;
+  background: #392061;
+  padding: 1rem;
+}
+
+.loading-page::before,
+.loading-page::after {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  content: "";
+}
+
+.loading-page::before {
+  inset: 0;
+  opacity: 0.18;
+  background-image:
+    linear-gradient(rgba(250, 240, 202, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(250, 240, 202, 0.06) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse at center, transparent 14%, black 82%);
+}
+
+.loading-page::after {
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 23%, rgba(22, 9, 40, 0.3) 100%);
+}
+
+.loading-background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.loading-glow {
+  position: absolute;
+  width: 24rem;
+  height: 24rem;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(1.5rem);
+  animation: loadingAmbientGlow 12s ease-in-out infinite alternate;
+}
+
+.loading-glow--one {
+  top: -11rem;
+  left: -10rem;
+  background: radial-gradient(circle, rgba(210, 193, 244, 0.95), transparent 68%);
+}
+
+.loading-glow--two {
+  right: -12rem;
+  bottom: -12rem;
+  background: radial-gradient(circle, rgba(145, 116, 191, 0.95), transparent 68%);
+  animation-duration: 15s;
+  animation-delay: -7.5s;
+  animation-direction: alternate-reverse;
+}
+
+.loading-streak,
+.loading-particle {
+  position: absolute;
+  display: block;
+}
+
+.loading-streak {
+  height: 1px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(220, 204, 255, 0.82), transparent);
+  animation: loadingAmbientStreak 12s ease-in-out infinite alternate;
+}
+
+.loading-streak--one {
+  top: 18%;
+  left: 4%;
+  width: min(18rem, 26vw);
+  animation-duration: 11s;
+  animation-delay: -2s;
+}
+
+.loading-streak--two {
+  top: 31%;
+  right: 2%;
+  width: min(14rem, 22vw);
+  animation-duration: 14s;
+  animation-delay: -7s;
+  animation-direction: alternate-reverse;
+}
+
+.loading-streak--three {
+  bottom: 24%;
+  left: 3%;
+  width: min(15rem, 23vw);
+  animation-duration: 13s;
+  animation-delay: -5s;
+}
+
+.loading-streak--four {
+  right: 6%;
+  bottom: 15%;
+  width: min(12rem, 19vw);
+  animation-duration: 16s;
+  animation-delay: -9s;
+  animation-direction: alternate-reverse;
+}
+
+.loading-particle {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(250, 240, 202, 0.38);
+  box-shadow: 0 0 0.75rem rgba(220, 204, 255, 0.28);
+  animation: loadingParticleDrift 7s ease-in-out infinite alternate;
+}
+
+.loading-particle-one {
+  top: 29%;
+  right: 15%;
+}
+
+.loading-particle-two {
+  bottom: 18%;
+  left: 16%;
+  width: 3px;
+  height: 3px;
+  animation-delay: -2.5s;
+}
+
+.loading-particle-three {
+  top: 69%;
+  right: 25%;
+  width: 4px;
+  height: 4px;
+  animation-delay: -5s;
+}
+
+.loading-card {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  width: min(360px, calc(100vw - 32px));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 1.25rem 3.5rem rgba(20, 8, 35, 0.34), 0 0 2.5rem rgba(196, 184, 224, 0.12);
+  padding: 24px 32px;
+  text-align: center;
+}
+
+.loading-card-ghost {
+  display: block;
+  width: 40px;
+  margin: 0 auto;
+  filter: drop-shadow(0 0 0.65rem rgba(220, 204, 255, 0.48));
+  animation: loadingGhostPulse 2.2s ease-in-out infinite;
+}
+
+.loading-card-title {
+  margin: 12px 0 0;
+  color: #faf0ca;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.loading-data-rows {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.loading-data-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 0;
+  animation: loadingRowEnter 420ms ease-out forwards;
+}
+
+.loading-data-row-one {
+  animation-delay: 0.3s;
+}
+
+.loading-data-row-two {
+  animation-delay: 0.7s;
+}
+
+.loading-data-row-three {
+  animation-delay: 1.1s;
+}
+
+.loading-status-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 999px;
+}
+
+.loading-status-dot-high {
+  background: #b0212b;
+}
+
+.loading-status-dot-medium {
+  background: #8a5a0a;
+}
+
+.loading-status-dot-low {
+  background: #1a6b45;
+}
+
+.loading-data-bar {
+  position: relative;
+  display: block;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(250, 240, 202, 0.14);
+}
+
+.loading-data-bar::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(90deg, transparent 0%, rgba(250, 240, 202, 0.38) 50%, transparent 100%);
+  transform: translateX(-100%);
+  animation: loadingBarShimmer 1.8s ease-in-out infinite;
+}
+
+.loading-data-bar-short {
+  width: 65%;
+}
+
+.loading-data-bar-long {
+  width: 80%;
+}
+
+.loading-data-bar-medium {
+  width: 50%;
+}
+
+@keyframes loadingRowEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes loadingBarShimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes loadingGhostPulse {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes loadingAmbientStreak {
+  from {
+    transform: translate(-70px, -13px);
+    opacity: 0.08;
+  }
+
+  to {
+    transform: translate(70px, 14px);
+    opacity: 0.58;
+  }
+}
+
+@keyframes loadingAmbientGlow {
+  from {
+    opacity: 0.12;
+    transform: scale(0.78);
+  }
+
+  to {
+    opacity: 0.5;
+    transform: scale(1.22);
+  }
+}
+
+@keyframes loadingParticleDrift {
+  from {
+    transform: translateY(-5px);
+    opacity: 0.3;
+  }
+
+  to {
+    transform: translateY(5px);
+    opacity: 0.8;
+  }
+}
+
+@media (max-width: 420px) {
+  .loading-card {
+    padding: 24px;
+  }
+
+  .loading-streak--one {
+    left: -8%;
+  }
+
+  .loading-streak--two {
+    right: -8%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-card-ghost,
+  .loading-data-row,
+  .loading-data-bar::after,
+  .loading-streak,
+  .loading-particle,
+  .loading-glow {
+    animation: none;
+  }
+
+  .loading-data-row {
+    opacity: 1;
+    transform: none;
+  }
+}

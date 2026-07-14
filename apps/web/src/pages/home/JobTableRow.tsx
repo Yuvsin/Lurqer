@@ -4,7 +4,6 @@ import type { Job, JobStatus } from "@/types/Job";
 
 type JobTableRowProps = {
   job: Job;
-  loadJobs: () => Promise<void>;
 };
 
 const statusStyles: Record<JobStatus, string> = {
@@ -17,13 +16,7 @@ const statusStyles: Record<JobStatus, string> = {
   "No response": "bg-[#FCF0D8] text-[#8A5A0A]",
 };
 
-export function JobTableRow({ job, loadJobs }: JobTableRowProps) {
-  async function handleRefresh() {
-    await loadJobs();
-  }
-
-  handleRefresh();
-
+export function JobTableRow({ job }: JobTableRowProps) {
   return (
     <TableRow className="hover:bg-[#FAF9F6]">
       <TableCell className="font-medium text-[#131200]">{job.company}</TableCell>
