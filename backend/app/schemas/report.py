@@ -1,45 +1,40 @@
-from pydantic import BaseModel, Field
-from backend.app.schemas.common import RiskLevel
-from enum import Enum
+from datetime import datetime
+from uuid import UUID
 
-class ScanSource(str, Enum):
-    text = "text"
-    url = "url"
-    extension = "extension"
+from pydantic import Field
+
+from app.schemas.common import ApiModel, RiskLevel, ScanSource, Severity
+from app.schemas.job import CategoryScores, Finding
 
 
-class ReportFlag(BaseModel):
+class ReportFlag(ApiModel):
     title: str
     description: str
-    severity: RiskLevel
-    evidence: str | None = None # Default value of None. Evidence can be optional
-
-# Max score is 100, lowest score is 100
-class CategoryScores(BaseModel):
-    phishing: int = Field(ge=0, le=100)
-    fakeRecruiter: int = Field(ge=0, le=100)
-    scam: int = Field(ge=0, le=100)
-    ghost: int = Field(ge=0, le=100)
+    severity: Severity
+    evidence: str | None = None
 
 
-class Report(BaseModel):
-    id: str
-    jobId: str | None = None
-
-    company: str
-    title: str
-    platform: str | None = None
-
-    scanDate: str
+class ReportCreate(ApiModel):
+    job_id: UUID
     source: ScanSource
-    scannedUrl: str | None = None
-
-    riskLevel: RiskLevel
-    overallScore: int = Field(ge=0, le=100)
-    topFinding: str
-    summary: str
-
+    scanned_url: str | None = None
+    risk_level: RiskLevel
+    overall_score: int = Field(ge=0, le=100)
+    top_finding: str | None = Field(default=None, max_length=500)
     categories: CategoryScores
-    flags: list[ReportFlag]
+    findings: list[Finding] = Field(default_factory=list)
 
-    recommendation: str
+
+class ReportRead(ApiModel):
+    id: UUID
+    job_id: UUID
+    risk_level: RiskLevel
+    overall_score: int = Field(ge=0, le=100)
+    top_finding: str | None = None
+    categories: CategoryScores
+    findings: list[Finding]
+    scan_date: datetime
+    created_at: datetime
+
+
+Report = ReportRead
