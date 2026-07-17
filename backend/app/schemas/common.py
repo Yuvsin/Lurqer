@@ -25,6 +25,7 @@ class Severity(str, Enum):
 
 
 class JobStatus(str, Enum):
+    saved = "Saved"
     applied = "Applied"
     screening = "Screening"
     interview = "Interview"

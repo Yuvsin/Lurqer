@@ -1,27 +1,33 @@
+from uuid import UUID
+
 from pydantic import Field, HttpUrl
 
-from app.schemas.common import ApiModel, JobStatus, ScanSource
-from app.schemas.job import JobRead
-from app.schemas.report import ReportRead
+from app.schemas.common import ApiModel, RiskLevel, ScanSource
+from app.schemas.job import CategoryScores, Finding, JobRead
 
 
 class ScanUrlRequest(ApiModel):
     url: HttpUrl
-    add_to_dashboard: bool = True
-    status: JobStatus = JobStatus.applied
 
 
-class ScanTextFallbackRequest(ApiModel):
-    text: str = Field(min_length=20, max_length=100_000)
-    company: str = Field(default="Unknown company", max_length=200)
-    title: str = Field(default="Untitled posting", max_length=250)
-    platform: str = Field(default="Pasted text", max_length=100)
+class ScanTextRequest(ApiModel):
+    description: str = Field(min_length=20, max_length=100_000)
+    title: str | None = Field(default=None, max_length=250)
+    company: str | None = Field(default=None, max_length=200)
+    location: str | None = Field(default=None, max_length=200)
     source_url: HttpUrl | None = None
-    add_to_dashboard: bool = True
-    status: JobStatus = JobStatus.applied
+    source_site: str | None = Field(default=None, max_length=100)
+
+
+ScanTextFallbackRequest = ScanTextRequest
 
 
 class ScanResponse(ApiModel):
     source: ScanSource
     job: JobRead
-    report: ReportRead
+    report_id: UUID
+    overall_score: int = Field(ge=0, le=100)
+    risk_level: RiskLevel
+    category_scores: CategoryScores
+    top_finding: str | None = None
+    findings: list[Finding]

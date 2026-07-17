@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import jobs, reports
+from app.routers import jobs, reports, scans
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
@@ -22,6 +22,7 @@ app.add_middleware(
 
 app.include_router(jobs.router)
 app.include_router(reports.router)
+app.include_router(scans.router)
 
 
 @app.get("/health")
