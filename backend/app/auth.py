@@ -7,10 +7,7 @@ from uuid import UUID
 
 from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, status
-from fastapi.security import (
-    HTTPAuthorizationCredentials,
-    HTTPBearer,
-)
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from supabase import Client, create_client
 from supabase_auth.errors import AuthError
 
@@ -20,17 +17,13 @@ load_dotenv(BACKEND_DIR / ".env")
 
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_PUBLISHABLE_KEY = os.getenv(
-    "SUPABASE_PUBLISHABLE_KEY"
-)
+SUPABASE_PUBLISHABLE_KEY = os.getenv("SUPABASE_PUBLISHABLE_KEY")
 
 if not SUPABASE_URL:
     raise RuntimeError("SUPABASE_URL is required")
 
 if not SUPABASE_PUBLISHABLE_KEY:
-    raise RuntimeError(
-        "SUPABASE_PUBLISHABLE_KEY is required"
-    )
+    raise RuntimeError("SUPABASE_PUBLISHABLE_KEY is required")
 
 
 supabase: Client = create_client(
@@ -38,8 +31,7 @@ supabase: Client = create_client(
     SUPABASE_PUBLISHABLE_KEY,
 )
 
-# Reads: Authorization: Bearer <token>
-# auto_error=False lets us return our own consistent 401.
+# auto_error=False lets the API return one consistent authentication response.
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
@@ -60,14 +52,10 @@ def get_current_user_id(
     ],
 ) -> UUID:
     if credentials is None:
-        raise unauthorized(
-            "Authorization bearer token is required"
-        )
+        raise unauthorized("Authorization bearer token is required")
 
     if credentials.scheme.lower() != "bearer":
-        raise unauthorized(
-            "Authorization scheme must be Bearer"
-        )
+        raise unauthorized("Authorization scheme must be Bearer")
 
     token = credentials.credentials
 
@@ -78,19 +66,26 @@ def get_current_user_id(
             raise unauthorized()
 
         claims = response.get("claims", {})
+        expected_issuer = f"{SUPABASE_URL.rstrip('/')}/auth/v1"
+        audience = claims.get("aud")
+        valid_audience = (
+            audience == "authenticated"
+            or isinstance(audience, list)
+            and "authenticated" in audience
+        )
+        if claims.get("iss") != expected_issuer or not valid_audience:
+            raise unauthorized()
+
         subject = claims.get("sub")
 
         if not subject:
-            raise unauthorized(
-                "Token does not contain a user ID"
-            )
+            raise unauthorized("Token does not contain a user ID")
 
         return UUID(str(subject))
 
     except HTTPException:
         raise
-
-    except (AuthError, TypeError, ValueError) as error:
+    except (AuthError, KeyError, TypeError, ValueError) as error:
         raise unauthorized() from error
 
 

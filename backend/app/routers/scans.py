@@ -5,7 +5,7 @@ from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlmodel import Session, select
 
 from app.auth import CurrentUserId
@@ -33,6 +33,8 @@ router = APIRouter(
     prefix="/scan",
     tags=["Scans"],
 )
+
+MAX_SOURCE_URL_LENGTH = 2048
 
 
 def _http_error(status_code: int, code: str, message: str) -> HTTPException:
@@ -107,6 +109,12 @@ def _scan(
         raise _http_error(500, "scan_failed", "The posting could not be scanned") from error
 
 
+def _bounded(value: str | None, max_length: int) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip()[:max_length]
+
+
 def _upsert_job_and_create_report(
     *,
     session: Session,
@@ -119,6 +127,16 @@ def _upsert_job_and_create_report(
     source_site: str,
     result: ScanResult,
 ) -> tuple[JobModel, ReportModel, CategoryScores, list[Finding]]:
+    if (
+        len(source_url) > MAX_SOURCE_URL_LENGTH
+        or len(normalized_source_url) > MAX_SOURCE_URL_LENGTH
+    ):
+        raise _http_error(400, "url_too_long", "The source URL is too long")
+
+    title = _bounded(title, 250)
+    company = _bounded(company, 200)
+    location = _bounded(location, 200)
+    source_site = _bounded(source_site, 100) or "Unknown source"
     try:
         statement = select(JobModel).where(
             JobModel.user_id == current_user_id,
@@ -174,6 +192,13 @@ def _upsert_job_and_create_report(
         session.refresh(job)
         session.refresh(report)
         return job, report, categories, findings
+    except IntegrityError as error:
+        session.rollback()
+        raise _http_error(
+            409,
+            "scan_conflict",
+            "This posting was scanned concurrently; retry the scan",
+        ) from error
     except SQLAlchemyError as error:
         session.rollback()
         raise _http_error(500, "database_error", "The scan could not be saved") from error

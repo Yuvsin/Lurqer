@@ -15,15 +15,15 @@ const findingStyles: Record<Severity, FindingStyle> = {
 };
 
 type ReportFindingsProps = {
-  findings?: Finding[];
+  findings?: Finding[] | null;
 };
 
 export function ReportFindings({ findings }: ReportFindingsProps) {
   if (!findings || findings.length === 0) {
     return (
       <div className="rounded-xl border border-[#ECE7D8] p-6 text-center">
-        <p className="text-sm text-[#5B5750]">No scan data yet.</p>
-        <p className="mt-1 text-xs text-[#9A98B5]">Run a scan on this posting to see findings.</p>
+        <p className="text-sm font-medium text-[#145235]">No suspicious signals found.</p>
+        <p className="mt-1 text-xs text-[#9A98B5]">This scan did not trigger any detection rules.</p>
       </div>
     );
   }

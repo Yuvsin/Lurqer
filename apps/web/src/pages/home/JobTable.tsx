@@ -1,16 +1,28 @@
 import { useState } from "react";
-import type { Job } from "@/types/Job";
-import { Table, TableHeader, TableBody, TableHead, TableRow } from "@/components/ui/table";
+import type { Job, JobStatus } from "@/types/Job";
+import { Table, TableHeader, TableBody, TableCell, TableHead, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { JobTableRow } from "./JobTableRow";
 
 type JobTableProps = {
   jobs: Job[];
+  onStatusChange: (job: Job, status: JobStatus) => void;
+  onDelete: (job: Job) => void;
+  updatingJobId?: string;
+  deletingJobId?: string;
+  actionsDisabled: boolean;
 };
 
 const PAGE_SIZE = 10;
 
-export function JobTable({ jobs }: JobTableProps) {
+export function JobTable({
+  jobs,
+  onStatusChange,
+  onDelete,
+  updatingJobId,
+  deletingJobId,
+  actionsDisabled,
+}: JobTableProps) {
   const [page, setPage] = useState(0);
 
   const totalPages = Math.ceil(jobs.length / PAGE_SIZE);
@@ -20,8 +32,8 @@ export function JobTable({ jobs }: JobTableProps) {
 
   return (
     <div>
-      <div className="border border-[#ECE7D8] rounded-xl overflow-hidden">
-        <Table>
+      <div className="overflow-x-auto rounded-xl border border-[#ECE7D8]">
+        <Table className="min-w-[760px]">
           <TableHeader>
             <TableRow className="bg-[#F2F0EC] hover:bg-[#F2F0EC]">
               <TableHead className="text-[#5B5750] font-semibold">Company</TableHead>
@@ -30,12 +42,29 @@ export function JobTable({ jobs }: JobTableProps) {
               <TableHead className="text-[#5B5750] font-semibold">Platform</TableHead>
               <TableHead className="text-[#5B5750] font-semibold">Date</TableHead>
               <TableHead className="text-[#5B5750] font-semibold">Risk</TableHead>
+              <TableHead className="text-right text-[#5B5750] font-semibold">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginated.map((job) => (
-              <JobTableRow key={job.id} job={job} />
-            ))}
+            {paginated.length > 0 ? (
+              paginated.map((job) => (
+                <JobTableRow
+                  key={job.id}
+                  job={job}
+                  onStatusChange={onStatusChange}
+                  onDelete={onDelete}
+                  isUpdating={updatingJobId === job.id}
+                  isDeleting={deletingJobId === job.id}
+                  actionsDisabled={actionsDisabled}
+                />
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={7} className="h-24 text-center text-[#5B5750]">
+                  No applications match this filter.
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </div>

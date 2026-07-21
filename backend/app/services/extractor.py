@@ -31,6 +31,31 @@ BLOCKED_PAGE_MARKERS = (
     "request blocked",
 )
 
+LINKEDIN_TITLE_PATTERN = re.compile(
+    r"^(?P<company>.+?)\s+hiring\s+(?P<title>.+)\s+in\s+"
+    r"(?P<location>.+?)\s*\|\s*LinkedIn\s*$",
+    re.IGNORECASE,
+)
+
+LINKEDIN_TITLE_SELECTORS = (
+    "h1.top-card-layout__title",
+    ".top-card-layout__title",
+    ".topcard__title",
+    ".job-details-jobs-unified-top-card__job-title",
+)
+
+LINKEDIN_COMPANY_SELECTORS = (
+    ".topcard__org-name-link",
+    '[data-tracking-control-name="public_jobs_topcard-org-name"]',
+    ".job-details-jobs-unified-top-card__company-name",
+    ".topcard__flavor",
+)
+
+LINKEDIN_LOCATION_SELECTORS = (
+    ".topcard__flavor--bullet",
+    ".job-details-jobs-unified-top-card__primary-description-container",
+)
+
 
 class ExtractionError(ValueError):
     """Base exception for job-posting extraction failures."""
@@ -215,6 +240,49 @@ def _meta_content(soup: BeautifulSoup, selectors: tuple[str, ...]) -> str | None
     return None
 
 
+def _first_element_text(soup: BeautifulSoup, selectors: tuple[str, ...]) -> str | None:
+    for selector in selectors:
+        value = _element_text(soup.select_one(selector))
+        if value:
+            return value
+    return None
+
+
+def _from_linkedin_page(soup: BeautifulSoup) -> _ExtractedFields:
+    return _ExtractedFields(
+        title=_first_element_text(soup, LINKEDIN_TITLE_SELECTORS),
+        company=_first_element_text(soup, LINKEDIN_COMPANY_SELECTORS),
+        location=_first_element_text(soup, LINKEDIN_LOCATION_SELECTORS),
+    )
+
+
+def _parse_linkedin_page_title(value: str | None) -> _ExtractedFields:
+    cleaned = _clean_text(value)
+    if not cleaned:
+        return _ExtractedFields()
+
+    match = LINKEDIN_TITLE_PATTERN.fullmatch(cleaned)
+    if not match:
+        return _ExtractedFields()
+
+    return _ExtractedFields(
+        company=_clean_text(match.group("company")),
+        title=_clean_text(match.group("title")),
+        location=_clean_text(match.group("location")),
+    )
+
+
+def _linkedin_metadata_title(value: str | None) -> _ExtractedFields:
+    parsed = _parse_linkedin_page_title(value)
+    if parsed.title:
+        return parsed
+
+    cleaned = _clean_text(value)
+    if cleaned and not re.search(r"\|\s*LinkedIn\s*$", cleaned, re.IGNORECASE):
+        return _ExtractedFields(title=cleaned)
+    return _ExtractedFields()
+
+
 def _from_metadata(soup: BeautifulSoup) -> _ExtractedFields:
     description = _meta_content(
         soup,
@@ -292,6 +360,10 @@ def _source_site(source_url: str) -> str:
     return hostname.removeprefix("www.")
 
 
+def _is_linkedin_site(source_site: str) -> bool:
+    return source_site == "linkedin.com" or source_site.endswith(".linkedin.com")
+
+
 def extract_job_posting(html: str, source_url: str) -> ExtractedJobPosting:
     if not isinstance(html, str) or not html.strip():
         raise InvalidHTMLContentError("Fetched HTML is empty")
@@ -304,11 +376,39 @@ def extract_job_posting(html: str, source_url: str) -> ExtractedJobPosting:
     structured = _from_json_ld(soup)
     metadata = _from_metadata(soup)
 
-    title = structured.title or metadata.title
-    if not title:
-        title = _element_text(soup.find("h1")) or _element_text(soup.title)
-    company = structured.company or metadata.company
-    location = structured.location or metadata.location
+    if _is_linkedin_site(source_site):
+        linkedin_page = _from_linkedin_page(soup)
+        metadata_title = _linkedin_metadata_title(metadata.title)
+        page_title = _parse_linkedin_page_title(_element_text(soup.title))
+
+        # Structured data remains authoritative; LinkedIn-only fallbacks fill gaps.
+        title = (
+            structured.title
+            or linkedin_page.title
+            or metadata_title.title
+            or _element_text(soup.find("h1"))
+            or page_title.title
+        )
+        company = (
+            structured.company
+            or linkedin_page.company
+            or metadata.company
+            or metadata_title.company
+            or page_title.company
+        )
+        location = (
+            structured.location
+            or linkedin_page.location
+            or metadata.location
+            or metadata_title.location
+            or page_title.location
+        )
+    else:
+        title = structured.title or metadata.title
+        if not title:
+            title = _element_text(soup.find("h1")) or _element_text(soup.title)
+        company = structured.company or metadata.company
+        location = structured.location or metadata.location
 
     description = structured.description
     method = structured.extraction_method

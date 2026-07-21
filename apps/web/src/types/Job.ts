@@ -1,40 +1,59 @@
 export type RiskLevel = "High" | "Medium" | "Low";
-export type Severity  = "High" | "Medium" | "Low";
-export type JobStatus = "Applied" | "Screening" | "Interview" | "Offer" | "Rejected" | "Ghosted" | "No response";
+export type Severity = "High" | "Medium" | "Low";
+export type JobStatus =
+  | "Saved"
+  | "Applied"
+  | "Screening"
+  | "Interview"
+  | "Offer"
+  | "Rejected"
+  | "Ghosted"
+  | "No response";
 
 export interface Finding {
-  id:             string;
-  severity:       Severity;
-  category:       string;
-  title:          string;
-  evidence:       string;
-  description:    string;
+  id: string;
+  severity: Severity;
+  category: string;
+  title: string;
+  evidence: string;
+  description: string;
   recommendation: string;
-  points:         number;
+  points: number;
 }
 
-//could probably update these later on
 export interface CategoryScores {
-  phishing:      number;
+  phishing: number;
   fakeRecruiter: number;
-  scam:          number;
-  ghost:         number;
+  scam: number;
+  ghost: number;
 }
 
 export interface Job {
-  id:           string;
-  company:      string;
-  title:        string;
-  platform:     string;
-  date:         string;
-  riskLevel:    RiskLevel;
-  status:       JobStatus;
+  id: string;
+  company: string;
+  title: string;
+  platform: string;
+  date: string;
+  riskLevel: RiskLevel;
+  status: JobStatus;
+  sourceUrl?: string | null;
+  location?: string | null;
+  overallScore?: number | null;
+  scanDate?: string | null;
+  dateApplied?: string | null;
+  topFinding?: string | null;
+  categories?: CategoryScores | null;
+  findings?: Finding[] | null;
+}
 
-  // populated after a scan — optional until backend exists
-  overallScore?: number;
-  scanDate?:     string;
-  dateApplied?:  string;
-  topFinding?:   string;
-  categories?:   CategoryScores;
-  findings?:     Finding[];
+export type JobWithLatestReport = Job;
+
+export interface JobUpdateRequest {
+  company?: string;
+  title?: string;
+  platform?: string;
+  sourceUrl?: string;
+  location?: string | null;
+  status?: JobStatus;
+  dateApplied?: string | null;
 }

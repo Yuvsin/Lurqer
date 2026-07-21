@@ -39,7 +39,7 @@ def get_reports(
     statement = (
         select(ReportModel)
         .where(ReportModel.user_id == current_user_id)
-        .order_by(ReportModel.scan_date.desc())
+        .order_by(ReportModel.scan_date.desc(), ReportModel.id.desc())
     )
     reports = session.exec(statement).all()
     return [_to_report_read(report) for report in reports]
@@ -81,7 +81,7 @@ def get_reports_for_job(
             ReportModel.job_id == parsed_job_id,
             ReportModel.user_id == current_user_id,
         )
-        .order_by(ReportModel.scan_date.desc())
+        .order_by(ReportModel.scan_date.desc(), ReportModel.id.desc())
     )
     reports = session.exec(reports_statement).all()
     return [_to_report_read(report) for report in reports]

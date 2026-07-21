@@ -60,7 +60,7 @@ export function ReportCategories({ categories }: ReportCategoriesProps) {
   }
 
   return (
-    <div className="mb-6 grid grid-cols-4 gap-3">
+    <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
       {categories.map(({ key, label, score }) => {
         const s = categoryCard[key];
 

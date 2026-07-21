@@ -142,6 +142,27 @@ def validate_url(url: str) -> None:
 def normalize_url(url: str) -> str:
     parsed = _parsed_url(url)
     hostname = _canonical_hostname(parsed.hostname or "")
+
+    query_items = parse_qsl(parsed.query, keep_blank_values=True)
+    normalized_path = parsed.path.rstrip("/").lower()
+    if (
+        (hostname == "linkedin.com" or hostname.endswith(".linkedin.com"))
+        and (
+            normalized_path == "/jobs/collections"
+            or normalized_path.startswith("/jobs/collections/")
+        )
+    ):
+        current_job_id = next(
+            (
+                value
+                for key, value in query_items
+                if key == "currentJobId" and value.isdigit()
+            ),
+            None,
+        )
+        if current_job_id:
+            return f"https://www.linkedin.com/jobs/view/{current_job_id}"
+
     scheme = parsed.scheme.lower()
     port = parsed.port
     default_port = (scheme == "http" and port == 80) or (
@@ -156,7 +177,7 @@ def normalize_url(url: str) -> str:
 
     query_items = [
         (key, value)
-        for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+        for key, value in query_items
         if not key.lower().startswith("utm_")
         and key.lower() not in TRACKING_QUERY_KEYS
     ]
