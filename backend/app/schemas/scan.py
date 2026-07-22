@@ -3,7 +3,7 @@ from uuid import UUID
 from pydantic import Field, HttpUrl
 
 from app.schemas.common import ApiModel, RiskLevel, ScanSource
-from app.schemas.job import CategoryScores, Finding, JobRead
+from app.schemas.job import CategoryScores, Finding, JobRead, PositiveSignal, PostingContext
 
 
 class ScanUrlRequest(ApiModel):
@@ -31,3 +31,8 @@ class ScanResponse(ApiModel):
     category_scores: CategoryScores
     top_finding: str | None = None
     findings: list[Finding]
+    quality_concerns: list[Finding] = Field(default_factory=list)
+    positive_signals: list[PositiveSignal] = Field(default_factory=list)
+    posting_context: PostingContext
+    submitted_url: str | None = None
+    final_url: str | None = None

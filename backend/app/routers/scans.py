@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from hashlib import sha256
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
@@ -14,9 +15,16 @@ from app.models.job import Job as JobModel
 from app.models.job import utc_now as job_utc_now
 from app.models.report import Report as ReportModel
 from app.schemas.common import JobStatus, RiskLevel, ScanSource
-from app.schemas.job import CategoryScores, Finding, JobRead
+from app.schemas.job import (
+    CategoryScores,
+    Finding,
+    JobRead,
+    PositiveSignal,
+    PostingContext,
+)
 from app.schemas.scan import ScanResponse, ScanTextRequest, ScanUrlRequest
 from app.services.extractor import ExtractionError, ExtractedJobPosting, extract_job_posting
+from app.services.posting_history import PostingHistory, derive_posting_history
 from app.services.scanner import ScanResult, scan_job_posting
 from app.services.url_security import (
     FetchError,
@@ -57,16 +65,56 @@ def _findings(result: ScanResult, report_id: UUID) -> list[Finding]:
     return [
         Finding(
             id=f"{report_id}:{index}",
+            rule_id=finding.rule_id,
             category=finding.category,
             severity=finding.severity,
+            confidence=finding.confidence,
             title=finding.title,
             evidence=finding.evidence,
             description=finding.description,
+            explanation=finding.explanation,
             recommendation=finding.recommendation,
+            score_impact=finding.score_impact,
             points=finding.points,
         )
         for index, finding in enumerate(result.findings, start=1)
     ]
+
+
+def _quality_concerns(result: ScanResult, report_id: UUID) -> list[Finding]:
+    quality_result = ScanResult(
+        category_scores=result.category_scores,
+        overall_score=result.overall_score,
+        risk_level=result.risk_level,
+        top_finding=result.top_finding,
+        findings=result.quality_concerns,
+        quality_concerns=[],
+        positive_signals=[],
+    )
+    return _findings(quality_result, report_id)
+
+
+def _positive_signals(result: ScanResult) -> list[PositiveSignal]:
+    return [
+        PositiveSignal(
+            rule_id=signal.rule_id,
+            title=signal.title,
+            evidence=signal.evidence,
+            description=signal.description,
+        )
+        for signal in result.positive_signals
+    ]
+
+
+def _posting_context(history: PostingHistory) -> PostingContext:
+    return PostingContext(
+        posting_date=history.posting_date,
+        first_seen=history.first_seen,
+        most_recently_seen=history.most_recently_seen,
+        observed_age_days=history.observed_age_days,
+        repeat_count=history.repeat_count,
+        possible_reposting=history.possible_reposting,
+    )
 
 
 def _manual_source_key(request: ScanTextRequest) -> tuple[str, str, str]:
@@ -96,6 +144,8 @@ def _scan(
     description: str,
     source_url: str,
     source_site: str,
+    submitted_url: str | None = None,
+    final_url: str | None = None,
 ) -> ScanResult:
     try:
         return scan_job_posting(
@@ -104,6 +154,8 @@ def _scan(
             description=description,
             source_url=source_url,
             source_site=source_site,
+            submitted_url=submitted_url,
+            final_url=final_url,
         )
     except Exception as error:
         raise _http_error(500, "scan_failed", "The posting could not be scanned") from error
@@ -122,11 +174,14 @@ def _upsert_job_and_create_report(
     title: str | None,
     company: str | None,
     location: str | None,
+    posting_date: date | None,
     source_url: str,
     normalized_source_url: str,
     source_site: str,
     result: ScanResult,
-) -> tuple[JobModel, ReportModel, CategoryScores, list[Finding]]:
+    submitted_url: str | None,
+    final_url: str | None,
+) -> tuple[JobModel, ReportModel, CategoryScores, list[Finding], list[Finding], list[PositiveSignal]]:
     if (
         len(source_url) > MAX_SOURCE_URL_LENGTH
         or len(normalized_source_url) > MAX_SOURCE_URL_LENGTH
@@ -153,6 +208,7 @@ def _upsert_job_and_create_report(
                 source_url=source_url,
                 normalized_source_url=normalized_source_url,
                 location=location,
+                posting_date=posting_date,
                 status=JobStatus.saved.value,
             )
             session.add(job)
@@ -164,6 +220,8 @@ def _upsert_job_and_create_report(
                 job.company = company
             if location:
                 job.location = location
+            if posting_date:
+                job.posting_date = posting_date
             if source_site:
                 job.platform = source_site
             job.source_url = source_url
@@ -174,6 +232,8 @@ def _upsert_job_and_create_report(
         report_id = uuid4()
         categories = _category_scores(result)
         findings = _findings(result, report_id)
+        quality_concerns = _quality_concerns(result, report_id)
+        positive_signals = _positive_signals(result)
         report = ReportModel(
             id=report_id,
             user_id=current_user_id,
@@ -186,12 +246,22 @@ def _upsert_job_and_create_report(
                 finding.model_dump(mode="json", by_alias=True)
                 for finding in findings
             ],
+            quality_concerns=[
+                concern.model_dump(mode="json", by_alias=True)
+                for concern in quality_concerns
+            ],
+            positive_signals=[
+                signal.model_dump(mode="json", by_alias=True)
+                for signal in positive_signals
+            ],
+            submitted_url=submitted_url,
+            final_url=final_url,
         )
         session.add(report)
         session.commit()
         session.refresh(job)
         session.refresh(report)
-        return job, report, categories, findings
+        return job, report, categories, findings, quality_concerns, positive_signals
     except IntegrityError as error:
         session.rollback()
         raise _http_error(
@@ -211,6 +281,9 @@ def _response(
     report: ReportModel,
     categories: CategoryScores,
     findings: list[Finding],
+    quality_concerns: list[Finding],
+    positive_signals: list[PositiveSignal],
+    posting_context: PostingContext,
 ) -> ScanResponse:
     return ScanResponse(
         source=source,
@@ -227,6 +300,7 @@ def _response(
             overall_score=report.overall_score,
             scan_date=report.scan_date,
             date_applied=job.date_applied,
+            posting_date=job.posting_date,
             top_finding=report.top_finding,
             categories=categories,
             findings=findings,
@@ -237,6 +311,11 @@ def _response(
         category_scores=categories,
         top_finding=report.top_finding,
         findings=findings,
+        quality_concerns=quality_concerns,
+        positive_signals=positive_signals,
+        posting_context=posting_context,
+        submitted_url=report.submitted_url,
+        final_url=report.final_url,
     )
 
 
@@ -251,6 +330,7 @@ def scan_url(
         validate_url(source_url)
         normalized_url = normalize_url(source_url)
         html = fetch_safe_html(normalized_url)
+        final_url = normalize_url(getattr(html, "final_url", normalized_url))
     except (InvalidURLError, UnsafeDestinationError) as error:
         raise _http_error(400, "unsafe_url", "The URL is invalid or unsafe") from error
     except UnsupportedContentTypeError as error:
@@ -261,7 +341,7 @@ def scan_url(
         raise _http_error(502, "fetch_failed", "The page could not be retrieved") from error
 
     try:
-        posting: ExtractedJobPosting = extract_job_posting(html, normalized_url)
+        posting: ExtractedJobPosting = extract_job_posting(html, final_url)
     except ExtractionError as error:
         raise HTTPException(
             status_code=422,
@@ -278,24 +358,33 @@ def scan_url(
         description=posting.description,
         source_url=posting.source_url,
         source_site=posting.source_site,
+        submitted_url=normalized_url,
+        final_url=final_url,
     )
-    job, report, categories, findings = _upsert_job_and_create_report(
+    job, report, categories, findings, quality_concerns, positive_signals = _upsert_job_and_create_report(
         session=session,
         current_user_id=current_user_id,
         title=posting.title,
         company=posting.company,
         location=posting.location,
+        posting_date=posting.posting_date,
         source_url=posting.source_url,
-        normalized_source_url=normalized_url,
+        normalized_source_url=final_url,
         source_site=posting.source_site,
         result=result,
+        submitted_url=normalized_url,
+        final_url=final_url,
     )
+    context = _posting_context(derive_posting_history(session, current_user_id, job))
     return _response(
         source=ScanSource.url,
         job=job,
         report=report,
         categories=categories,
         findings=findings,
+        quality_concerns=quality_concerns,
+        positive_signals=positive_signals,
+        posting_context=context,
     )
 
 
@@ -312,22 +401,31 @@ def scan_text(
         description=request.description,
         source_url=source_url,
         source_site=source_site,
+        submitted_url=normalized_url if request.source_url is not None else None,
+        final_url=normalized_url if request.source_url is not None else None,
     )
-    job, report, categories, findings = _upsert_job_and_create_report(
+    job, report, categories, findings, quality_concerns, positive_signals = _upsert_job_and_create_report(
         session=session,
         current_user_id=current_user_id,
         title=request.title,
         company=request.company,
         location=request.location,
+        posting_date=None,
         source_url=source_url,
         normalized_source_url=normalized_url,
         source_site=source_site,
         result=result,
+        submitted_url=normalized_url if request.source_url is not None else None,
+        final_url=normalized_url if request.source_url is not None else None,
     )
+    context = _posting_context(derive_posting_history(session, current_user_id, job))
     return _response(
         source=ScanSource.text,
         job=job,
         report=report,
         categories=categories,
         findings=findings,
+        quality_concerns=quality_concerns,
+        positive_signals=positive_signals,
+        posting_context=context,
     )

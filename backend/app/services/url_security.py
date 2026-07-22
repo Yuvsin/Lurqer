@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import socket
+from dataclasses import dataclass
 from urllib.parse import (
     parse_qsl,
     quote,
@@ -49,6 +50,21 @@ class ResponseTooLargeError(URLSecurityError):
 
 class FetchError(URLSecurityError):
     """The remote resource could not be fetched safely."""
+
+
+@dataclass(frozen=True)
+class SafeFetchResult:
+    content: str
+    final_url: str
+
+
+class SafeFetchedHTML(str):
+    final_url: str
+
+    def __new__(cls, content: str, final_url: str):
+        value = super().__new__(cls, content)
+        value.final_url = final_url
+        return value
 
 
 def _parsed_url(url: str):
@@ -193,7 +209,7 @@ def _validate_content_type(content_type_header: str) -> None:
         )
 
 
-def fetch_safe_html(url: str) -> str:
+def fetch_safe_document(url: str) -> SafeFetchResult:
     current_url = normalize_url(url)
     timeout = httpx.Timeout(
         connect=CONNECT_TIMEOUT_SECONDS,
@@ -253,7 +269,10 @@ def fetch_safe_html(url: str) -> str:
 
                     encoding = response.encoding or "utf-8"
                     try:
-                        return bytes(body).decode(encoding, errors="replace")
+                        return SafeFetchResult(
+                            content=bytes(body).decode(encoding, errors="replace"),
+                            final_url=current_url,
+                        )
                     except LookupError as error:
                         raise FetchError("Remote server declared an invalid encoding") from error
     except URLSecurityError:
@@ -262,3 +281,8 @@ def fetch_safe_html(url: str) -> str:
         raise FetchError("URL could not be fetched") from error
 
     raise FetchError("URL could not be fetched")
+
+
+def fetch_safe_html(url: str) -> str:
+    result = fetch_safe_document(url)
+    return SafeFetchedHTML(result.content, result.final_url)

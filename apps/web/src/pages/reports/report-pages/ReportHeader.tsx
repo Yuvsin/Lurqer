@@ -66,7 +66,7 @@ export function ReportHeader({
       <div className="mt-4 rounded-xl border border-[#ECE7D8] bg-[#F2F0EC] p-4">
         <p className="text-xs font-semibold uppercase text-[#9A98B5]">Top finding</p>
         <p className="mt-1 text-sm font-medium text-[#131200]">
-          {topFinding ?? "No suspicious signals were found."}
+          {topFinding ?? "No concerning indicators were found in the available posting details."}
         </p>
       </div>
     </header>

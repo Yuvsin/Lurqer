@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.services.scanner.models import JobScanInput, ScanFinding, ScanResult
-from app.services.scanner.rules import RULES
+from app.services.scanner.rules import POSITIVE_RULES, QUALITY_RULES, RULES
 from app.services.scanner.scoring import score_findings
 
 
@@ -9,7 +9,7 @@ def _deduplicate_findings(findings: list[ScanFinding]) -> list[ScanFinding]:
     unique_findings: list[ScanFinding] = []
     seen_rules: set[tuple[str, str]] = set()
     for finding in findings:
-        key = (finding.category, finding.title)
+        key = (finding.category, finding.rule_id)
         if key not in seen_rules:
             seen_rules.add(key)
             unique_findings.append(finding)
@@ -22,6 +22,8 @@ def scan_job_posting(
     description: str | None = None,
     source_url: str | None = None,
     source_site: str | None = None,
+    submitted_url: str | None = None,
+    final_url: str | None = None,
 ) -> ScanResult:
     data = JobScanInput(
         title=title,
@@ -29,13 +31,29 @@ def scan_job_posting(
         description=description,
         source_url=source_url,
         source_site=source_site,
+        submitted_url=submitted_url,
+        final_url=final_url,
     )
     findings = [
         finding
         for rule in RULES
         if (finding := rule(data)) is not None
     ]
-    return score_findings(_deduplicate_findings(findings))
+    quality_concerns = [
+        finding
+        for rule in QUALITY_RULES
+        if (finding := rule(data)) is not None
+    ]
+    positive_signals = [
+        signal
+        for rule in POSITIVE_RULES
+        if (signal := rule(data)) is not None
+    ]
+    return score_findings(
+        _deduplicate_findings(findings),
+        _deduplicate_findings(quality_concerns),
+        positive_signals,
+    )
 
 
 def scan_posting(
@@ -44,6 +62,8 @@ def scan_posting(
     description: str | None = None,
     source_url: str | None = None,
     source_site: str | None = None,
+    submitted_url: str | None = None,
+    final_url: str | None = None,
 ) -> ScanResult:
     return scan_job_posting(
         title=title,
@@ -51,4 +71,6 @@ def scan_posting(
         description=description,
         source_url=source_url,
         source_site=source_site,
+        submitted_url=submitted_url,
+        final_url=final_url,
     )

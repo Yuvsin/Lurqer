@@ -4,6 +4,7 @@ import json
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass
+from datetime import date, datetime
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -82,6 +83,7 @@ class ExtractedJobPosting:
     source_url: str
     source_site: str
     extraction_method: str
+    posting_date: date | None = None
 
 
 @dataclass
@@ -91,6 +93,20 @@ class _ExtractedFields:
     location: str | None = None
     description: str | None = None
     extraction_method: str | None = None
+    posting_date: date | None = None
+
+
+def _structured_date(value: Any) -> date | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    candidate = value.strip().replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(candidate).date()
+    except ValueError:
+        try:
+            return date.fromisoformat(candidate[:10])
+        except ValueError:
+            return None
 
 
 def _clean_text(value: str | None) -> str | None:
@@ -225,6 +241,7 @@ def _from_json_ld(soup: BeautifulSoup) -> _ExtractedFields:
         location=_json_ld_location(posting),
         description=description,
         extraction_method="json_ld" if _is_usable_description(description) else None,
+        posting_date=_structured_date(posting.get("datePosted")),
     )
 
 
@@ -435,4 +452,5 @@ def extract_job_posting(html: str, source_url: str) -> ExtractedJobPosting:
         source_url=source_url,
         source_site=source_site,
         extraction_method=method,
+        posting_date=structured.posting_date,
     )

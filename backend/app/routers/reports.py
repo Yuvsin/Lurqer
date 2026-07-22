@@ -8,6 +8,8 @@ from app.database import get_session
 from app.models.job import Job as JobModel
 from app.models.report import Report as ReportModel
 from app.schemas.report import Report as ReportRead
+from app.schemas.job import PostingContext
+from app.services.posting_history import derive_posting_history
 
 router = APIRouter()
 reports_router = APIRouter(
@@ -27,8 +29,34 @@ def _parse_id(value: str, detail: str) -> UUID:
         raise HTTPException(status_code=404, detail=detail) from error
 
 
-def _to_report_read(report: ReportModel) -> ReportRead:
-    return ReportRead.model_validate(report)
+def _to_report_read(
+    report: ReportModel,
+    current_user_id: UUID,
+    session: Session,
+) -> ReportRead:
+    job = session.exec(
+        select(JobModel).where(
+            JobModel.id == report.job_id,
+            JobModel.user_id == current_user_id,
+        )
+    ).first()
+    context = None
+    if job is not None:
+        history = derive_posting_history(session, current_user_id, job)
+        context = PostingContext(
+            posting_date=history.posting_date,
+            first_seen=history.first_seen,
+            most_recently_seen=history.most_recently_seen,
+            observed_age_days=history.observed_age_days,
+            repeat_count=history.repeat_count,
+            possible_reposting=history.possible_reposting,
+        )
+    return ReportRead.model_validate(
+        {
+            **report.model_dump(),
+            "posting_context": context,
+        }
+    )
 
 
 @reports_router.get("", response_model=list[ReportRead])
@@ -42,7 +70,7 @@ def get_reports(
         .order_by(ReportModel.scan_date.desc(), ReportModel.id.desc())
     )
     reports = session.exec(statement).all()
-    return [_to_report_read(report) for report in reports]
+    return [_to_report_read(report, current_user_id, session) for report in reports]
 
 
 @reports_router.get("/{report_id}", response_model=ReportRead)
@@ -58,7 +86,7 @@ def get_report_by_id(
     report = session.exec(statement).first()
     if report is None:
         raise HTTPException(status_code=404, detail="Report not found")
-    return _to_report_read(report)
+    return _to_report_read(report, current_user_id, session)
 
 
 @job_reports_router.get("/{job_id}/reports", response_model=list[ReportRead])
@@ -84,7 +112,7 @@ def get_reports_for_job(
         .order_by(ReportModel.scan_date.desc(), ReportModel.id.desc())
     )
     reports = session.exec(reports_statement).all()
-    return [_to_report_read(report) for report in reports]
+    return [_to_report_read(report, current_user_id, session) for report in reports]
 
 
 router.include_router(reports_router)

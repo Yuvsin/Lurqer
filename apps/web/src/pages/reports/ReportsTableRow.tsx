@@ -88,9 +88,6 @@ export function ReportsTableRow({ report, job }: ReportsTableRowProps) {
               <Badge className={`rounded-full px-2 py-0.5 text-xs ${categoryStyle(report.categories.scam)}`}>
                 Scam - {report.categories.scam}
               </Badge>
-              <Badge className={`rounded-full px-2 py-0.5 text-xs ${categoryStyle(report.categories.ghost)}`}>
-                Ghost - {report.categories.ghost}
-              </Badge>
             </div>
           )}
         </div>
@@ -105,7 +102,7 @@ export function ReportsTableRow({ report, job }: ReportsTableRowProps) {
       </div>
 
       <div className={`mt-3 border-t border-[#DCD7CB] pt-2.5 text-xs ${styles.findingColor}`}>
-        {report.topFinding ?? "No suspicious signals were found."}
+        {report.topFinding ?? "No concerning indicators were found in the available posting details."}
       </div>
     </Link>
   );

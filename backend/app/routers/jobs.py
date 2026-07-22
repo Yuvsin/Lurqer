@@ -44,6 +44,7 @@ def _to_job_read(job: JobModel, report: ReportModel | None = None) -> JobRead:
         overall_score=report.overall_score if report else None,
         scan_date=report.scan_date if report else None,
         date_applied=job.date_applied,
+        posting_date=job.posting_date,
         top_finding=report.top_finding if report else None,
         categories=categories,
         findings=findings,

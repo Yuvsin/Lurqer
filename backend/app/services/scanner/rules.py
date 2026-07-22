@@ -3,298 +3,443 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 from app.services.scanner.models import (
     Category,
+    Confidence,
     Finding,
     JobScanInput,
+    PositiveSignal,
     Severity,
 )
 
-EVIDENCE_CONTEXT_CHARACTERS = 70
-
-VAGUE_COMPANY_NAMES = {
-    "",
-    "a leading company",
-    "confidential",
-    "confidential client",
-    "n/a",
-    "not disclosed",
-    "stealth company",
-    "unknown",
-    "unknown company",
+EVIDENCE_CONTEXT_CHARACTERS = 80
+SHORTENER_DOMAINS = {
+    "bit.ly", "cutt.ly", "goo.gl", "is.gd", "ow.ly", "rebrand.ly",
+    "t.co", "tiny.cc", "tinyurl.com",
 }
+TRUSTED_APPLICATION_DOMAINS = {
+    "ashbyhq.com", "bamboohr.com", "greenhouse.io", "lever.co",
+    "myworkdayjobs.com", "smartrecruiters.com", "workday.com",
+}
+PERSONAL_EMAIL_PATTERN = re.compile(
+    r"\b[A-Z0-9._%+-]+@(?:aol|gmail|hotmail|icloud|outlook|protonmail|yahoo)\.(?:com|me|net)\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
-class _RuleDefinition:
+class RuleDefinition:
+    rule_id: str
     category: Category
     severity: Severity
+    confidence: Confidence
     title: str
-    patterns: tuple[str, ...]
-    description: str
+    score_impact: int
+    explanation: str
     recommendation: str
-    points: int
 
+
+RULE_DEFINITIONS = {
+    "SEC_UNREALISTIC_COMPENSATION": RuleDefinition(
+        "SEC_UNREALISTIC_COMPENSATION", "scam", "Medium", "Medium",
+        "Implausible compensation combination", 15,
+        "The posting combines unusually strong guaranteed earnings with minimal experience or work.",
+        "Verify compensation and duties through the employer's official careers site before proceeding.",
+    ),
+    "SEC_IMMEDIATE_OFFER": RuleDefinition(
+        "SEC_IMMEDIATE_OFFER", "fake_recruiter", "Medium", "High",
+        "Guaranteed hiring or no-interview offer", 10,
+        "The posting promises acceptance or an offer without a conventional interview process.",
+        "Confirm the hiring process with the employer through an independently verified channel.",
+    ),
+    "SEC_OFF_PLATFORM": RuleDefinition(
+        "SEC_OFF_PLATFORM", "fake_recruiter", "Low", "Medium",
+        "Off-platform hiring communication", 5,
+        "The posting directs recruiting communication to an informal messaging platform.",
+        "Verify the recruiter through the employer's official domain before moving the conversation.",
+    ),
+    "SEC_UPFRONT_PAYMENT": RuleDefinition(
+        "SEC_UPFRONT_PAYMENT", "scam", "High", "High",
+        "Applicant payment required", 50,
+        "The posting requires the applicant to pay a fee, deposit, or recruiter-controlled training cost.",
+        "Do not pay fees or deposits to obtain a job. Verify the opening independently.",
+    ),
+    "SEC_FAKE_CHECK_EQUIPMENT": RuleDefinition(
+        "SEC_FAKE_CHECK_EQUIPMENT", "scam", "High", "High",
+        "Fake-check equipment scheme", 50,
+        "The applicant is instructed to use a check or reimbursed funds to buy equipment from a designated seller.",
+        "Do not deposit the check or purchase equipment. Contact the employer through its official site.",
+    ),
+    "SEC_CRYPTO_TRANSFER": RuleDefinition(
+        "SEC_CRYPTO_TRANSFER", "scam", "High", "High",
+        "Cryptocurrency transfer required", 50,
+        "The posting requires cryptocurrency movement as part of hiring or the advertised work.",
+        "Do not purchase or transfer cryptocurrency for a prospective employer.",
+    ),
+    "SEC_RESHIPPING": RuleDefinition(
+        "SEC_RESHIPPING", "scam", "High", "High",
+        "Package forwarding arrangement", 50,
+        "The role asks a home-based worker to receive, relabel, and forward packages.",
+        "Do not receive or forward packages. Verify the company and role independently.",
+    ),
+    "SEC_FUNDS_TRANSFER": RuleDefinition(
+        "SEC_FUNDS_TRANSFER", "scam", "High", "High",
+        "Personal transfer of company funds", 50,
+        "The applicant is asked to receive, route, or send employer funds through personal financial channels.",
+        "Do not move money for a prospective employer or provide access to a personal account.",
+    ),
+    "SEC_SENSITIVE_INFORMATION": RuleDefinition(
+        "SEC_SENSITIVE_INFORMATION", "phishing", "High", "High",
+        "Sensitive information requested before hiring", 70,
+        "The posting requests identity or banking credentials before a legitimate offer and onboarding stage.",
+        "Share sensitive documents only through a verified onboarding system after accepting a legitimate offer.",
+    ),
+    "SEC_EXTERNAL_DESTINATION": RuleDefinition(
+        "SEC_EXTERNAL_DESTINATION", "phishing", "Low", "Low",
+        "Unexpected application destination", 5,
+        "The submitted link redirects to an unrelated or obscured destination.",
+        "Confirm the final destination through the employer's official careers page before entering information.",
+    ),
+    "SEC_SHORTENED_LINK": RuleDefinition(
+        "SEC_SHORTENED_LINK", "phishing", "Low", "Medium",
+        "Shortened application link", 5,
+        "A shortened URL obscures the application destination.",
+        "Expand and verify the destination before opening it or entering personal information.",
+    ),
+    "SEC_EXCESSIVE_URGENCY": RuleDefinition(
+        "SEC_EXCESSIVE_URGENCY", "fake_recruiter", "Low", "Medium",
+        "Excessive hiring pressure", 3,
+        "The posting applies unusually strong time pressure that may discourage verification.",
+        "Pause and verify the company, recruiter, and posting through independent channels.",
+    ),
+    "SEC_OPTIMIZATION_TASK": RuleDefinition(
+        "SEC_OPTIMIZATION_TASK", "scam", "Medium", "Medium",
+        "Vague commission task scheme", 15,
+        "The work centers on repetitive rating, liking, clicking, or optimization tasks tied to earnings.",
+        "Verify the business model and never deposit funds to unlock tasks or withdraw earnings.",
+    ),
+    "QUALITY_VAGUE_RESPONSIBILITIES": RuleDefinition(
+        "QUALITY_VAGUE_RESPONSIBILITIES", "job_quality", "Low", "Medium",
+        "Responsibilities are poorly defined", 0,
+        "The posting describes the role mainly with vague promises rather than concrete responsibilities.",
+        "Ask for specific day-to-day duties, deliverables, and reporting structure.",
+    ),
+    "QUALITY_COMMISSION_ONLY": RuleDefinition(
+        "QUALITY_COMMISSION_ONLY", "job_quality", "Medium", "High",
+        "Compensation appears commission-only", 0,
+        "The role appears to rely entirely on commission without clearly presenting that structure up front.",
+        "Confirm the guaranteed base pay, commission terms, and employment classification in writing.",
+    ),
+    "QUALITY_TITLE_DUTIES_MISMATCH": RuleDefinition(
+        "QUALITY_TITLE_DUTIES_MISMATCH", "job_quality", "Medium", "Medium",
+        "Job title and duties do not align", 0,
+        "The stated title conflicts with the primary responsibilities described in the posting.",
+        "Ask the employer to clarify the role title, core duties, and performance expectations.",
+    ),
+}
 
 RuleDetector = Callable[[JobScanInput], Finding | None]
+PositiveDetector = Callable[[JobScanInput], PositiveSignal | None]
+
+
+def _description(data: JobScanInput) -> str:
+    return data.description.strip() if isinstance(data.description, str) else ""
 
 
 def _combined_text(data: JobScanInput) -> str:
     return "\n".join(
         value.strip()
-        for value in (
-            data.title,
-            data.company,
-            data.description,
-            data.source_url,
-            data.source_site,
-        )
+        for value in (data.title, data.company, data.description, data.source_url)
         if isinstance(value, str) and value.strip()
     )
 
 
 def _evidence_excerpt(text: str, start: int, end: int) -> str:
-    excerpt_start = max(0, start - EVIDENCE_CONTEXT_CHARACTERS)
-    excerpt_end = min(len(text), end + EVIDENCE_CONTEXT_CHARACTERS)
-    excerpt = re.sub(r"\s+", " ", text[excerpt_start:excerpt_end]).strip()
-    if excerpt_start > 0:
-        excerpt = f"...{excerpt}"
-    if excerpt_end < len(text):
-        excerpt = f"{excerpt}..."
-    return excerpt
+    sentence_start = max(text.rfind(".", 0, start), text.rfind("\n", 0, start)) + 1
+    next_period = text.find(".", end)
+    sentence_end = next_period + 1 if next_period >= 0 else len(text)
+    if sentence_end - sentence_start > 220:
+        sentence_start = max(0, start - EVIDENCE_CONTEXT_CHARACTERS)
+        sentence_end = min(len(text), end + EVIDENCE_CONTEXT_CHARACTERS)
+    excerpt = re.sub(r"\s+", " ", text[sentence_start:sentence_end]).strip()
+    return excerpt[:240]
 
 
-def _detect_patterns(data: JobScanInput, rule: _RuleDefinition) -> Finding | None:
-    text = _combined_text(data)
-    matches = (
-        match
-        for pattern in rule.patterns
-        if (match := re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL))
-    )
-    match = next(matches, None)
+def _match(text: str, pattern: str) -> re.Match[str] | None:
+    return re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
+
+
+def _finding(
+    definition_id: str,
+    text: str,
+    match: re.Match[str] | None,
+    *,
+    score_impact: int | None = None,
+    confidence: Confidence | None = None,
+) -> Finding | None:
     if match is None:
         return None
+    definition = RULE_DEFINITIONS[definition_id]
     return Finding(
-        category=rule.category,
-        severity=rule.severity,
-        title=rule.title,
+        rule_id=definition.rule_id,
+        category=definition.category,
+        severity=definition.severity,
+        confidence=confidence or definition.confidence,
+        title=definition.title,
         evidence=_evidence_excerpt(text, match.start(), match.end()),
-        description=rule.description,
-        recommendation=rule.recommendation,
-        points=rule.points,
+        explanation=definition.explanation,
+        recommendation=definition.recommendation,
+        score_impact=definition.score_impact if score_impact is None else score_impact,
     )
 
 
-def detect_telegram_or_whatsapp_request(data: JobScanInput) -> Finding | None:
-    return _detect_patterns(
-        data,
-        _RuleDefinition(
-            category="fake_recruiter",
-            severity="Medium",
-            title="Off-platform messaging request",
-            patterns=(
-                r"\b(?:contact|message|interview|reach (?:me|us))\b.{0,50}\btelegram\b",
-                r"\b(?:contact|message|interview|reach (?:me|us))\b.{0,50}\bwhats?app\b",
-                r"\b(?:telegram|whats?app)\b.{0,50}\b(?:contact|message|interview|chat)\b",
-            ),
-            description="The posting moves recruiting communication to an informal messaging service.",
-            recommendation="Verify the recruiter through the employer's official domain and hiring portal.",
-            points=20,
-        ),
+def _domain(url: str | None) -> str | None:
+    if not url:
+        return None
+    try:
+        return (urlsplit(url).hostname or "").lower().removeprefix("www.") or None
+    except ValueError:
+        return None
+
+
+def _registrable_hint(domain: str) -> str:
+    parts = domain.split(".")
+    return ".".join(parts[-2:]) if len(parts) >= 2 else domain
+
+
+def _is_trusted_application_domain(domain: str) -> bool:
+    return any(domain == trusted or domain.endswith(f".{trusted}") for trusted in TRUSTED_APPLICATION_DOMAINS)
+
+
+def detect_unrealistic_compensation(data: JobScanInput) -> Finding | None:
+    text = _combined_text(data)
+    combinations = (
+        r"(?:no experience (?:required|needed).{0,100}(?:guaranteed|earn|make).{0,30}\$\s?\d{3,}.{0,20}(?:day|week)|(?:guaranteed|earn|make).{0,30}\$\s?\d{3,}.{0,80}no experience)",
+        r"(?:\b(?:1|2|3|4|5)\s*(?:hours?|hrs?).{0,80}\$\s?\d{3,}.{0,15}(?:day|week)|\$\s?\d{3,}.{0,15}(?:day|week).{0,80}\b(?:1|2|3|4|5)\s*(?:hours?|hrs?))",
+        r"(?:entry[ -]level|data entry).{0,100}\$\s?(?:[8-9]\d|\d{3,})(?:\.\d+)?\s*(?:/|per\s*)hour",
+        r"guaranteed (?:income|earnings|pay).{0,100}(?:immediate acceptance|hired immediately|no interview)",
+    )
+    match = next((_match(text, pattern) for pattern in combinations if _match(text, pattern)), None)
+    return _finding("SEC_UNREALISTIC_COMPENSATION", text, match)
+
+
+def detect_immediate_offer(data: JobScanInput) -> Finding | None:
+    text = _description(data)
+    return _finding(
+        "SEC_IMMEDIATE_OFFER", text,
+        _match(text, r"\b(?:guaranteed (?:hire|hiring|job|offer)|hired immediately|immediate acceptance|offer (?:without|no) (?:an? )?interview|no interview (?:needed|required)|everyone (?:is|will be) accepted)\b"),
     )
 
 
-def detect_gift_card_or_payment_request(data: JobScanInput) -> Finding | None:
-    return _detect_patterns(
-        data,
-        _RuleDefinition(
-            category="scam",
-            severity="High",
-            title="Gift card or direct payment request",
-            patterns=(
-                r"\b(?:buy|purchase|send)\b.{0,45}\bgift cards?\b",
-                r"\b(?:wire transfer|western union|moneygram|cryptocurrency|bitcoin)\b",
-                r"\b(?:cashier'?s|certified|company) check\b.{0,70}\b(?:deposit|cash|mobile deposit)\b",
-                r"\b(?:send|transfer|pay)\b.{0,40}\b(?:money|funds|payment)\b",
-            ),
-            description="The posting asks the applicant to move money through a difficult-to-reverse method.",
-            recommendation="Do not send money, buy gift cards, deposit checks, or transfer funds for a job.",
-            points=35,
-        ),
+def detect_off_platform_communication(data: JobScanInput) -> Finding | None:
+    text = _description(data)
+    match = _match(text, r"\b(?:contact|message|interview|chat|reach (?:me|us)|send (?:your )?resume)\b.{0,60}\b(?:telegram|whats?app|signal|discord)\b|\b(?:telegram|whats?app|signal|discord)\b.{0,60}\b(?:contact|message|interview|chat)\b")
+    if match is None:
+        return None
+    strong_context = _match(text, r"\b(?:gift card|deposit|payment|bank account|ssn|social security|no interview|guaranteed (?:hire|job)|hired immediately)\b")
+    urgency = _match(text, r"\b(?:act now|respond within (?:an|one|\d+) hour|immediate approval|required immediately)\b")
+    points = 15 if strong_context else 8 if urgency else 5
+    if PERSONAL_EMAIL_PATTERN.search(text):
+        points = min(20, points + 2)
+    return _finding("SEC_OFF_PLATFORM", text, match, score_impact=points)
+
+
+def detect_upfront_payment(data: JobScanInput) -> Finding | None:
+    text = _description(data)
+    paid_training = r"(?:pay|fee|cost|purchase).{0,45}(?:required |mandatory )?(?:training|certification)|(?:training|certification).{0,45}(?:fee|paid to (?:us|the recruiter)|you must pay)"
+    fees = r"\b(?:application|placement|onboarding|registration|processing) (?:fee|deposit)\b|\bequipment deposit\b"
+    gift_cards = r"\b(?:buy|purchase|send).{0,45}gift cards?\b"
+    match = _match(text, f"(?:{fees}|{paid_training}|{gift_cards})")
+    if match and _match(match.group(0), r"\b(?:employer|company|we) (?:provides?|offers?) paid training\b"):
+        return None
+    return _finding("SEC_UPFRONT_PAYMENT", text, match)
+
+
+def detect_fake_check_equipment(data: JobScanInput) -> Finding | None:
+    text = _description(data)
+    return _finding(
+        "SEC_FAKE_CHECK_EQUIPMENT", text,
+        _match(text, r"\b(?:receive|send|mail|deposit|mobile deposit|cash).{0,45}(?:company |cashier'?s? )?check\b.{0,140}\b(?:buy|purchase|order|vendor|equipment|laptop|send (?:the )?(?:remaining|balance))\b|\b(?:buy|purchase) (?:your )?(?:equipment|laptop).{0,100}(?:designated|approved) (?:vendor|supplier).{0,80}(?:reimburse|reimbursement|funds)")
     )
 
 
-def detect_equipment_purchase_scam(data: JobScanInput) -> Finding | None:
-    return _detect_patterns(
-        data,
-        _RuleDefinition(
-            category="scam",
-            severity="High",
-            title="Equipment purchase or reimbursement scheme",
-            patterns=(
-                r"\b(?:buy|purchase|order)\b.{0,60}\b(?:equipment|laptop|computer|software)\b",
-                r"\b(?:equipment|laptop|computer)\b.{0,70}\b(?:reimburse|reimbursement|vendor|check)\b",
-                r"\b(?:send|mail)\b.{0,30}\bcheck\b.{0,70}\b(?:equipment|supplies|laptop)\b",
-            ),
-            description="The applicant is expected to purchase equipment or use employer-supplied funds.",
-            recommendation="Use only equipment supplied directly through a verified employer process.",
-            points=35,
-        ),
+def detect_cryptocurrency_transfer(data: JobScanInput) -> Finding | None:
+    text = _description(data)
+    return _finding(
+        "SEC_CRYPTO_TRANSFER", text,
+        _match(text, r"\b(?:send|receive|purchase|buy|transfer|deposit).{0,50}(?:bitcoin|cryptocurrency|crypto|usdt|ethereum)\b|\b(?:bitcoin|cryptocurrency|crypto|usdt|ethereum).{0,50}(?:wallet|transfer|deposit|payment)\b"),
     )
 
 
-def detect_ssn_request(data: JobScanInput) -> Finding | None:
-    return _detect_patterns(
-        data,
-        _RuleDefinition(
-            category="phishing",
-            severity="High",
-            title="Premature Social Security number request",
-            patterns=(
-                r"\b(?:social security number|ssn)\b.{0,60}\b(?:before|prior to|application|interview|considered)\b",
-                r"\b(?:provide|submit|send|need|require)\b.{0,45}\b(?:social security number|ssn)\b",
-            ),
-            description="The posting requests a Social Security number before a verified formal offer.",
-            recommendation="Provide an SSN only through a verified onboarding system after accepting an offer.",
-            points=30,
-        ),
+def detect_package_reshipping(data: JobScanInput) -> Finding | None:
+    text = _description(data)
+    return _finding(
+        "SEC_RESHIPPING", text,
+        _match(text, r"\b(?:receive|accept).{0,50}packages?.{0,100}(?:inspect|relabel|repack|forward|reship|ship).{0,50}(?:packages?|customer|address)|\b(?:package forwarding|reshipping (?:agent|position|job))\b"),
     )
 
 
-def detect_bank_information_request(data: JobScanInput) -> Finding | None:
-    return _detect_patterns(
-        data,
-        _RuleDefinition(
-            category="phishing",
-            severity="High",
-            title="Banking information request",
-            patterns=(
-                r"\b(?:bank account|banking information|routing number|account number)\b",
-                r"\b(?:direct deposit form|online banking login|bank credentials)\b",
-            ),
-            description="The posting requests banking details during recruiting rather than verified onboarding.",
-            recommendation="Do not share banking information until employment is verified and onboarding begins.",
-            points=30,
-        ),
+def detect_funds_transfer(data: JobScanInput) -> Finding | None:
+    text = _description(data)
+    personal_account = _match(text, r"\b(?:personal|your) (?:bank|banking) account\b.{0,100}\b(?:receive|route|transfer|funds|payments?)\b|\b(?:receive|route|transfer).{0,100}\b(?:funds|payments?)\b.{0,60}\b(?:personal|your) (?:bank|banking) account\b")
+    if personal_account:
+        return _finding("SEC_FUNDS_TRANSFER", text, personal_account, score_impact=70)
+    return _finding(
+        "SEC_FUNDS_TRANSFER", text,
+        _match(text, r"\b(?:receive|route|transfer|forward|send).{0,50}(?:company funds|client funds|payments?).{0,80}(?:third part|vendor|on behalf of (?:us|the company))\b"),
     )
 
 
-def detect_personal_recruiter_email(data: JobScanInput) -> Finding | None:
-    return _detect_patterns(
-        data,
-        _RuleDefinition(
-            category="fake_recruiter",
-            severity="Medium",
-            title="Recruiter uses a personal email domain",
-            patterns=(
-                r"\b[A-Z0-9._%+-]+@(?:gmail|yahoo|hotmail|outlook|aol|icloud|protonmail)\.(?:com|net|me)\b",
-            ),
-            description="The recruiter contact uses a consumer email provider instead of a company domain.",
-            recommendation="Confirm the recruiter's identity through the company's official website.",
-            points=20,
-        ),
+def detect_sensitive_information(data: JobScanInput) -> Finding | None:
+    text = _description(data)
+    post_hire = _match(text, r"\b(?:after (?:you are )?hired|after accepting (?:an|the) offer|during onboarding|upon employment|post[- ]offer).{0,100}(?:ssn|social security|government (?:id|identification)|tax documents?|bank(?:ing)? information|direct deposit)\b")
+    if post_hire:
+        return None
+    match = _match(text, r"\b(?:provide|submit|send|text|email|need|require).{0,55}(?:social security number|ssn|online banking (?:login|password|credentials)|bank (?:account|login|password|credentials)|routing number|account number|government (?:id|identification)|driver'?s license|passport).{0,80}(?:before (?:an? )?(?:interview|offer)|with (?:your|the) application|to (?:apply|be considered)|immediately|now)?")
+    return _finding("SEC_SENSITIVE_INFORMATION", text, match)
+
+
+def detect_external_destination(data: JobScanInput) -> Finding | None:
+    submitted = _domain(data.submitted_url)
+    final = _domain(data.final_url)
+    if not submitted or not final or submitted == final:
+        return None
+    if _registrable_hint(submitted) == _registrable_hint(final) or _is_trusted_application_domain(final):
+        return None
+    evidence = f"{submitted} redirected to {final}"
+    definition = RULE_DEFINITIONS["SEC_EXTERNAL_DESTINATION"]
+    impact = 10 if submitted in SHORTENER_DOMAINS or final in SHORTENER_DOMAINS else 5
+    return Finding(
+        rule_id=definition.rule_id,
+        category=definition.category,
+        severity=definition.severity,
+        confidence=definition.confidence,
+        title=definition.title,
+        evidence=evidence,
+        explanation=definition.explanation,
+        recommendation=definition.recommendation,
+        score_impact=impact,
     )
 
 
 def detect_shortened_link(data: JobScanInput) -> Finding | None:
-    return _detect_patterns(
-        data,
-        _RuleDefinition(
-            category="phishing",
-            severity="Medium",
-            title="Suspicious shortened link",
-            patterns=(
-                r"https?://(?:bit\.ly|tinyurl\.com|t\.co|goo\.gl|ow\.ly|is\.gd|cutt\.ly|rebrand\.ly|tiny\.cc)/[^\s]+",
-            ),
-            description="A shortened URL hides the final destination of an application or contact link.",
-            recommendation="Expand and verify the link before opening it or entering personal information.",
-            points=20,
-        ),
+    text = _combined_text(data)
+    domains = "|".join(re.escape(domain) for domain in sorted(SHORTENER_DOMAINS))
+    return _finding("SEC_SHORTENED_LINK", text, _match(text, rf"https?://(?:{domains})/[^\s<>)]+"))
+
+
+def detect_excessive_urgency(data: JobScanInput) -> Finding | None:
+    text = _description(data)
+    return _finding(
+        "SEC_EXCESSIVE_URGENCY", text,
+        _match(text, r"\b(?:respond within (?:an|one|\d+) hour|limited slots?,? act now|immediate approval required|failure to respond.{0,45}(?:lose|forfeit) (?:the|your) position|respond immediately or.{0,40}(?:lose|forfeit))\b"),
     )
 
 
-def detect_extreme_urgency(data: JobScanInput) -> Finding | None:
-    return _detect_patterns(
-        data,
-        _RuleDefinition(
-            category="fake_recruiter",
-            severity="Medium",
-            title="Extreme urgency or pressure",
-            patterns=(
-                r"\b(?:act now|apply immediately|respond immediately|urgent hiring|limited time|within \d+ hours?)\b",
-                r"\b(?:must respond|must apply|decision today|start today)\b",
-            ),
-            description="The posting uses pressure intended to reduce time for independent verification.",
-            recommendation="Pause and verify the company, recruiter, and posting before continuing.",
-            points=15,
-        ),
+def detect_optimization_task(data: JobScanInput) -> Finding | None:
+    text = _description(data)
+    return _finding(
+        "SEC_OPTIMIZATION_TASK", text,
+        _match(text, r"\b(?:product optimization|rate (?:products|apps)|lik(?:e|ing) (?:posts|videos|content)|click(?:ing)? (?:ads|links|products)|complete simple tasks?).{0,100}(?:commission|earnings?|unlock|withdraw|daily income)\b"),
     )
 
 
-def detect_unrealistic_compensation(data: JobScanInput) -> Finding | None:
-    return _detect_patterns(
-        data,
-        _RuleDefinition(
-            category="scam",
-            severity="Medium",
-            title="Unrealistic compensation claim",
-            patterns=(
-                r"\b(?:earn|make|guaranteed)\b.{0,35}\$\s?\d{3,}(?:,\d{3})*.{0,20}\b(?:day|daily|week|weekly)\b",
-                r"\$\s?\d{3,}(?:,\d{3})*.{0,20}\bper (?:day|week)\b.{0,40}\b(?:no experience|easy|guaranteed)\b",
-                r"\b(?:unlimited earning potential|guaranteed income|get rich quick)\b",
-            ),
-            description="The advertised compensation is framed as unusually high or guaranteed for minimal work.",
-            recommendation="Compare compensation with reputable market data and verify the employer independently.",
-            points=20,
-        ),
-    )
-
-
-def detect_missing_company_information(data: JobScanInput) -> Finding | None:
-    company_name = data.company.strip() if isinstance(data.company, str) else ""
-    description_text = (
-        data.description.strip() if isinstance(data.description, str) else ""
-    )
-    if not company_name and not description_text:
+def detect_vague_responsibilities(data: JobScanInput) -> Finding | None:
+    text = _description(data)
+    if len(text) > 700:
         return None
-    vague_description = re.search(
-        r"\b(?:our client|a leading company|confidential employer|undisclosed company)\b",
-        description_text,
-        flags=re.IGNORECASE,
-    )
-    if company_name.lower() not in VAGUE_COMPANY_NAMES and vague_description is None:
-        return None
+    match = _match(text, r"\b(?:various tasks as assigned|help with different things|simple online work|general duties|other tasks as needed)\b")
+    concrete_verbs = re.findall(r"\b(?:build|design|develop|manage|analyze|review|maintain|coordinate|document|implement|support)\b", text, re.IGNORECASE)
+    return None if len(concrete_verbs) >= 2 else _finding("QUALITY_VAGUE_RESPONSIBILITIES", text, match)
 
-    evidence = company_name or (
-        _evidence_excerpt(
-            description_text,
-            vague_description.start(),
-            vague_description.end(),
-        )
-        if vague_description
-        else "No company name was provided."
+
+def detect_commission_only(data: JobScanInput) -> Finding | None:
+    text = _description(data)
+    return _finding(
+        "QUALITY_COMMISSION_ONLY", text,
+        _match(text, r"\b(?:commission only|100% commission|no (?:base )?salary|compensation is solely commission|unpaid unless (?:you|sales))\b"),
     )
-    return Finding(
-        category="ghost_posting",
-        severity="Medium",
-        title="Missing or vague company identity",
-        evidence=evidence,
-        description="The posting does not clearly identify the organization offering the role.",
-        recommendation="Confirm the legal company name and locate the role on its official careers site.",
-        points=15,
+
+
+def detect_title_duties_mismatch(data: JobScanInput) -> Finding | None:
+    title = (data.title or "").lower()
+    text = _description(data)
+    patterns = (
+        (r"(?:software|security|data) (?:engineer|analyst|developer)", r"\b(?:door[- ]to[- ]door sales|cold-call prospects|sell insurance policies)\b"),
+        (r"data entry", r"\b(?:receive|relabel|forward|reship) packages?\b"),
+        (r"administrative assistant", r"\b(?:sell products door[- ]to[- ]door|commission-only sales)\b"),
+    )
+    for title_pattern, duty_pattern in patterns:
+        if re.search(title_pattern, title, re.IGNORECASE):
+            match = _match(text, duty_pattern)
+            if match:
+                return _finding("QUALITY_TITLE_DUTIES_MISMATCH", text, match)
+    return None
+
+
+def detect_clear_structure(data: JobScanInput) -> PositiveSignal | None:
+    text = _description(data)
+    responsibilities = _match(text, r"\b(?:responsibilities|what you(?:'|’)ll do|duties)\b")
+    qualifications = _match(text, r"\b(?:qualifications|requirements|what you(?:'|’)ll bring)\b")
+    if not responsibilities or not qualifications:
+        return None
+    return PositiveSignal(
+        rule_id="POS_CLEAR_STRUCTURE",
+        title="Clear responsibilities and qualifications",
+        evidence=_evidence_excerpt(text, responsibilities.start(), qualifications.end()),
+        description="The posting presents identifiable duties and candidate qualifications.",
+    )
+
+
+def detect_identifiable_careers_page(data: JobScanInput) -> PositiveSignal | None:
+    domain = _domain(data.final_url or data.source_url)
+    if not domain:
+        return None
+    url = (data.final_url or data.source_url or "").lower()
+    company_tokens = [
+        token
+        for token in re.findall(r"[a-z0-9]+", (data.company or "").casefold())
+        if len(token) >= 4 and token not in {"company", "corporation", "limited"}
+    ]
+    employer_match = any(token in domain.replace("-", "") for token in company_tokens)
+    if not (
+        _is_trusted_application_domain(domain)
+        or (employer_match and ("/careers" in url or "/jobs/" in url))
+    ):
+        return None
+    return PositiveSignal(
+        rule_id="POS_IDENTIFIABLE_CAREERS_PAGE",
+        title="Identifiable careers destination",
+        evidence=domain,
+        description="The posting uses a recognizable careers or applicant-tracking destination.",
     )
 
 
 RULES: tuple[RuleDetector, ...] = (
-    detect_telegram_or_whatsapp_request,
-    detect_gift_card_or_payment_request,
-    detect_equipment_purchase_scam,
-    detect_ssn_request,
-    detect_bank_information_request,
-    detect_personal_recruiter_email,
-    detect_shortened_link,
-    detect_extreme_urgency,
     detect_unrealistic_compensation,
-    detect_missing_company_information,
+    detect_immediate_offer,
+    detect_off_platform_communication,
+    detect_upfront_payment,
+    detect_fake_check_equipment,
+    detect_cryptocurrency_transfer,
+    detect_package_reshipping,
+    detect_funds_transfer,
+    detect_sensitive_information,
+    detect_external_destination,
+    detect_shortened_link,
+    detect_excessive_urgency,
+    detect_optimization_task,
+)
+
+QUALITY_RULES: tuple[RuleDetector, ...] = (
+    detect_vague_responsibilities,
+    detect_commission_only,
+    detect_title_duties_mismatch,
+)
+
+POSITIVE_RULES: tuple[PositiveDetector, ...] = (
+    detect_clear_structure,
+    detect_identifiable_careers_page,
 )

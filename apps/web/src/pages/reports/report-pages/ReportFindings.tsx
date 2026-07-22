@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import type { Finding, Severity } from "@/types/Job";
+import type { Finding, PositiveSignal, Severity } from "@/types/Job";
 
 type FindingStyle = {
   border: string;
@@ -16,21 +16,14 @@ const findingStyles: Record<Severity, FindingStyle> = {
 
 type ReportFindingsProps = {
   findings?: Finding[] | null;
+  qualityConcerns?: Finding[] | null;
+  positiveSignals?: PositiveSignal[] | null;
 };
 
-export function ReportFindings({ findings }: ReportFindingsProps) {
-  if (!findings || findings.length === 0) {
-    return (
-      <div className="rounded-xl border border-[#ECE7D8] p-6 text-center">
-        <p className="text-sm font-medium text-[#145235]">No suspicious signals found.</p>
-        <p className="mt-1 text-xs text-[#9A98B5]">This scan did not trigger any detection rules.</p>
-      </div>
-    );
-  }
-
+function FindingSection({ title, findings, scored }: { title: string; findings: Finding[]; scored: boolean }) {
   return (
-    <section>
-      <p className="mb-3 text-sm font-semibold text-[#131200]">Findings</p>
+    <section className="mt-6 first:mt-0">
+      <p className="mb-3 text-sm font-semibold text-[#131200]">{title}</p>
 
       <div className="flex flex-col gap-2">
         {findings.map((finding) => {
@@ -44,9 +37,11 @@ export function ReportFindings({ findings }: ReportFindingsProps) {
                   <span className={`text-xs font-semibold ${s.label}`}>
                     {finding.severity} · {finding.category}
                   </span>
-                  <span className={`text-xs font-medium ${s.points}`}>
-                    +{finding.points} pts
-                  </span>
+                  {scored && (
+                    <span className={`text-xs font-medium ${s.points}`}>
+                      +{finding.scoreImpact} pts
+                    </span>
+                  )}
                 </div>
 
                 <p className="mb-1 text-sm font-medium text-[#131200]">
@@ -59,7 +54,7 @@ export function ReportFindings({ findings }: ReportFindingsProps) {
                 </p>
 
                 <p className="mb-2 text-xs text-[#5B5750]">
-                  {finding.description}
+                  {finding.explanation}
                 </p>
 
                 <Separator className="mb-2" />
@@ -67,11 +62,49 @@ export function ReportFindings({ findings }: ReportFindingsProps) {
                 <p className="text-xs text-[#392061]">
                   {finding.recommendation}
                 </p>
+                <p className="mt-2 text-xs text-[#9A98B5]">
+                  Confidence: {finding.confidence} · Rule: {finding.ruleId}
+                </p>
               </CardContent>
             </Card>
           );
         })}
       </div>
     </section>
+  );
+}
+
+export function ReportFindings({ findings, qualityConcerns, positiveSignals }: ReportFindingsProps) {
+  const securityFindings = findings ?? [];
+  const concerns = qualityConcerns ?? [];
+  const signals = securityFindings.length === 0 ? positiveSignals ?? [] : [];
+
+  return (
+    <div>
+      {securityFindings.length > 0 ? (
+        <FindingSection title="Security findings" findings={securityFindings} scored />
+      ) : (
+        <div className="rounded-xl border border-[#ECE7D8] p-6 text-center">
+          <p className="text-sm font-medium text-[#145235]">
+            No concerning indicators were found in the available posting details.
+          </p>
+        </div>
+      )}
+      {concerns.length > 0 && (
+        <FindingSection title="Job-quality concerns" findings={concerns} scored={false} />
+      )}
+      {signals.length > 0 && (
+        <section className="mt-6 rounded-xl border border-[#D6E8DD] bg-[#F2F0EC] p-4">
+          <h2 className="text-sm font-semibold text-[#145235]">Observable trust signals</h2>
+          {signals.map((signal) => (
+            <div key={signal.ruleId} className="mt-3 first:mt-2">
+              <p className="text-sm font-medium text-[#131200]">{signal.title}</p>
+              <p className="text-xs text-[#5B5750]">{signal.description}</p>
+              <p className="mt-1 text-xs text-[#9A98B5]">{signal.evidence}</p>
+            </div>
+          ))}
+        </section>
+      )}
+    </div>
   );
 }

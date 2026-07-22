@@ -23,6 +23,27 @@ function formatScanDate(value?: string | null) {
     : date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+function PostingContext({ report }: { report: Report }) {
+  const context = report.postingContext;
+  if (!context) return null;
+  const formatDate = (value: string) =>
+    new Date(value).toLocaleDateString(undefined, { dateStyle: "medium" });
+
+  return (
+    <section className="mb-6 rounded-xl border border-[#ECE7D8] bg-[#F2F0EC] p-4">
+      <h2 className="text-sm font-semibold text-[#131200]">Posting history context</h2>
+      <dl className="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+        {context.postingDate && <div><dt className="text-[#9A98B5]">Posting date</dt><dd className="mt-1 text-[#131200]">{formatDate(context.postingDate)}</dd></div>}
+        <div><dt className="text-[#9A98B5]">First seen</dt><dd className="mt-1 text-[#131200]">{formatDate(context.firstSeen)}</dd></div>
+        <div><dt className="text-[#9A98B5]">Most recently seen</dt><dd className="mt-1 text-[#131200]">{formatDate(context.mostRecentlySeen)}</dd></div>
+        <div><dt className="text-[#9A98B5]">Observed age</dt><dd className="mt-1 text-[#131200]">{context.observedAgeDays} days</dd></div>
+        <div><dt className="text-[#9A98B5]">Distinct postings</dt><dd className="mt-1 text-[#131200]">{context.repeatCount}</dd></div>
+      </dl>
+      {context.possibleReposting && <p className="mt-3 text-xs text-[#8A5A0A]">Possible reposting pattern detected.</p>}
+    </section>
+  );
+}
+
 function ReportHistory({
   reports,
   currentReportId,
@@ -126,7 +147,6 @@ export function ReportDetail() {
           score: report.categories.fakeRecruiter,
         },
         { key: "scam", label: "Scam / harvest", score: report.categories.scam },
-        { key: "ghost", label: "Ghost posting", score: report.categories.ghost },
       ]
     : [];
 
@@ -164,7 +184,12 @@ export function ReportDetail() {
         />
 
         <ReportCategories categories={categories} />
-        <ReportFindings findings={report.findings} />
+        <PostingContext report={report} />
+        <ReportFindings
+          findings={report.findings}
+          qualityConcerns={report.qualityConcerns}
+          positiveSignals={report.positiveSignals}
+        />
 
         {historyQuery.isLoading && (
           <p role="status" className="mt-8 text-xs text-[#9A98B5]">Loading scan history...</p>

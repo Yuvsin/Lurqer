@@ -36,6 +36,16 @@ class Report(SQLModel, table=True):
         default_factory=list,
         sa_column=Column(JSONB, nullable=False),
     )
+    quality_concerns: list[dict[str, Any]] = Field(
+        default_factory=list,
+        sa_column=Column(JSONB, nullable=False),
+    )
+    positive_signals: list[dict[str, Any]] = Field(
+        default_factory=list,
+        sa_column=Column(JSONB, nullable=False),
+    )
+    submitted_url: str | None = Field(default=None, max_length=2048)
+    final_url: str | None = Field(default=None, max_length=2048)
     scan_date: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),

@@ -12,13 +12,33 @@ export type JobStatus =
 
 export interface Finding {
   id: string;
+  ruleId: string;
   severity: Severity;
+  confidence: "High" | "Medium" | "Low";
   category: string;
   title: string;
   evidence: string;
   description: string;
+  explanation: string;
   recommendation: string;
+  scoreImpact: number;
   points: number;
+}
+
+export interface PositiveSignal {
+  ruleId: string;
+  title: string;
+  evidence: string;
+  description: string;
+}
+
+export interface PostingContext {
+  postingDate?: string | null;
+  firstSeen: string;
+  mostRecentlySeen: string;
+  observedAgeDays: number;
+  repeatCount: number;
+  possibleReposting: boolean;
 }
 
 export interface CategoryScores {
@@ -41,6 +61,7 @@ export interface Job {
   overallScore?: number | null;
   scanDate?: string | null;
   dateApplied?: string | null;
+  postingDate?: string | null;
   topFinding?: string | null;
   categories?: CategoryScores | null;
   findings?: Finding[] | null;

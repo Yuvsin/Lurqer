@@ -231,6 +231,31 @@ class BackendSteps16To21Tests(unittest.TestCase):
             self.assertEqual(len(session.exec(select(Job)).all()), 0)
             self.assertEqual(len(session.exec(select(Report)).all()), 0)
 
+    def test_posting_history_is_user_scoped_and_counts_distinct_jobs(self) -> None:
+        payload = {
+            "title": "Security Analyst",
+            "company": "History Corp",
+            "location": "Remote",
+            "description": LEGITIMATE_DESCRIPTION,
+            "sourceUrl": "https://history.example/jobs/security-1",
+        }
+        first = self.client.post("/scan/text", json=payload)
+        repeat = self.client.post("/scan/text", json=payload)
+        second = self.client.post(
+            "/scan/text",
+            json={**payload, "sourceUrl": "https://history.example/jobs/security-2"},
+        )
+        self.assertEqual(first.status_code, 201, first.text)
+        self.assertEqual(repeat.json()["postingContext"]["repeatCount"], 1)
+        self.assertEqual(second.json()["postingContext"]["repeatCount"], 2)
+        self.assertTrue(second.json()["postingContext"]["possibleReposting"])
+
+        self.current_user_id = uuid4()
+        other_user = self.client.post("/scan/text", json=payload)
+        self.assertEqual(other_user.status_code, 201, other_user.text)
+        self.assertEqual(other_user.json()["postingContext"]["repeatCount"], 1)
+        self.assertFalse(other_user.json()["postingContext"]["possibleReposting"])
+
     @patch("app.auth.supabase.auth.get_claims")
     def test_auth_claims_require_project_issuer_and_audience(self, get_claims) -> None:
         app.dependency_overrides.clear()

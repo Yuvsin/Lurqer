@@ -2,6 +2,8 @@ import type {
   CategoryScores,
   Finding,
   Job,
+  PositiveSignal,
+  PostingContext,
   RiskLevel,
 } from "./Job";
 
@@ -29,4 +31,9 @@ export interface ScanResponse {
   categoryScores: CategoryScores;
   topFinding?: string | null;
   findings: Finding[];
+  qualityConcerns: Finding[];
+  positiveSignals: PositiveSignal[];
+  postingContext: PostingContext;
+  submittedUrl?: string | null;
+  finalUrl?: string | null;
 }

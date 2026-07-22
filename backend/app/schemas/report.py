@@ -4,7 +4,7 @@ from uuid import UUID
 from pydantic import Field
 
 from app.schemas.common import ApiModel, RiskLevel, ScanSource, Severity
-from app.schemas.job import CategoryScores, Finding
+from app.schemas.job import CategoryScores, Finding, PositiveSignal, PostingContext
 
 
 class ReportFlag(ApiModel):
@@ -33,6 +33,11 @@ class ReportRead(ApiModel):
     top_finding: str | None = None
     categories: CategoryScores
     findings: list[Finding]
+    quality_concerns: list[Finding] = Field(default_factory=list)
+    positive_signals: list[PositiveSignal] = Field(default_factory=list)
+    submitted_url: str | None = None
+    final_url: str | None = None
+    posting_context: PostingContext | None = None
     scan_date: datetime
     created_at: datetime
 

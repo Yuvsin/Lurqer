@@ -33,6 +33,7 @@ class Job(SQLModel, table=True):
     location: str | None = Field(default=None, max_length=200)
     status: str = Field(default="Applied", max_length=30)
     date_applied: date | None = Field(default=None)
+    posting_date: date | None = Field(default=None)
     created_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),
