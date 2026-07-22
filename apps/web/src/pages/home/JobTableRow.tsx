@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
@@ -69,46 +70,54 @@ export function JobTableRow({
   return (
     <TableRow className="hover:bg-[#FAF9F6]">
       <TableCell className="font-medium text-[#131200]">{job.company}</TableCell>
-      <TableCell className="text-[#5B5750]">{job.title}</TableCell>
+      <TableCell className="w-48 max-w-48 text-[#5B5750]">
+        <span className="block truncate" title={job.title}>
+          {job.title}
+        </span>
+      </TableCell>
       <TableCell>
         <DropdownMenu>
           <DropdownMenuTrigger
             render={<Button variant="outline" size="sm" />}
             disabled={actionsDisabled}
             aria-label={`Change status for ${job.title} at ${job.company}`}
+            onClick={(event) => event.stopPropagation()}
             className={`min-w-28 justify-between gap-2 border-transparent shadow-none ${statusStyles[job.status]}`}
           >
             <span>{job.status}</span>
             <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-44">
-            <DropdownMenuLabel>Application status</DropdownMenuLabel>
-            {jobStatuses.map((status) => {
-              const isSelected = status === job.status;
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Application status</DropdownMenuLabel>
+              {jobStatuses.map((status) => {
+                const isSelected = status === job.status;
 
-              return (
-                <DropdownMenuItem
-                  key={status}
-                  disabled={actionsDisabled}
-                  onClick={() => {
-                    if (!isSelected) {
-                      onStatusChange(job, status);
-                    }
-                  }}
-                  className={isSelected ? "bg-[#F2F0EC] text-[#131200]" : undefined}
-                >
-                  <span className={`size-2 rounded-full ${statusDots[status]}`} aria-hidden="true" />
-                  <span>{status}</span>
-                  {isSelected && (
-                    <HugeiconsIcon
-                      icon={Tick02Icon}
-                      strokeWidth={2}
-                      className="ml-auto text-[#392061]"
-                    />
-                  )}
-                </DropdownMenuItem>
-              );
-            })}
+                return (
+                  <DropdownMenuItem
+                    key={status}
+                    closeOnClick
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (!isSelected && !actionsDisabled) {
+                        onStatusChange(job, status);
+                      }
+                    }}
+                    className={isSelected ? "bg-[#F2F0EC] text-[#131200]" : undefined}
+                  >
+                    <span className={`size-2 rounded-full ${statusDots[status]}`} aria-hidden="true" />
+                    <span>{status}</span>
+                    {isSelected && (
+                      <HugeiconsIcon
+                        icon={Tick02Icon}
+                        strokeWidth={2}
+                        className="ml-auto text-[#392061]"
+                      />
+                    )}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
         {isUpdating && <span className="sr-only">Updating status</span>}
