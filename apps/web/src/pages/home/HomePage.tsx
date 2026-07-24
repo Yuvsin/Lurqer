@@ -6,6 +6,15 @@ import { JobTable } from "./JobTable";
 import { Analytics } from "./Analytics";
 import { LoadingPage } from "./LoadingPage";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { useDeleteJob, useJobs, useUpdateJob } from "@/hooks/useJobs";
 import type { Job, JobStatus } from "@/types/Job";
@@ -36,6 +45,8 @@ export function HomePage() {
   const [activeSort, setActiveSort] = useState<ApplicationSort>();
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [actionError, setActionError] = useState<string>();
+  const [deleteError, setDeleteError] = useState<string>();
+  const [jobPendingDeletion, setJobPendingDeletion] = useState<Job>();
 
   const filteredJobs = useMemo(() => {
     const visibleJobs = (() => {
@@ -101,20 +112,29 @@ export function HomePage() {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Delete ${job.title} at ${job.company}? Its scan reports will also be deleted.`,
-    );
+    setActionError(undefined);
+    setDeleteError(undefined);
+    setJobPendingDeletion(job);
+  };
 
-    if (!confirmed) {
+  const confirmDelete = () => {
+    if (!jobPendingDeletion || deleteJob.isPending || updateJob.isPending) {
       return;
     }
 
     setActionError(undefined);
-    deleteJob.mutate(job.id, {
+    deleteJob.mutate(jobPendingDeletion.id, {
+      onSuccess: () => {
+        setDeleteError(undefined);
+        setJobPendingDeletion(undefined);
+      },
       onError: (mutationError) => {
-        setActionError(
-          getErrorMessage(mutationError, `Unable to delete ${job.title} at ${job.company}.`),
+        const message = getErrorMessage(
+          mutationError,
+          `Unable to delete ${jobPendingDeletion.title} at ${jobPendingDeletion.company}.`,
         );
+        setActionError(message);
+        setDeleteError(message);
       },
     });
   };
@@ -195,6 +215,49 @@ export function HomePage() {
           </>
         )}
       </div >
+      <AlertDialog
+        open={Boolean(jobPendingDeletion)}
+        onOpenChange={(open) => {
+          if (!open && !deleteJob.isPending) {
+            setDeleteError(undefined);
+            setJobPendingDeletion(undefined);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete job?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {jobPendingDeletion
+                ? `This will permanently delete "${jobPendingDeletion.title}" at ${jobPendingDeletion.company} and its associated scan history. This action cannot be undone.`
+                : "This job and its scan history will be permanently deleted. This action cannot be undone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteError && (
+            <Alert variant="destructive" className="mt-4 border-[#E8B7BA] bg-[#FDE2E3] p-3">
+              <AlertTitle>Job could not be deleted</AlertTitle>
+              <AlertDescription className="text-[#7A1620]">
+                {deleteError}
+              </AlertDescription>
+            </Alert>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteJob.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              size="lg"
+              disabled={deleteJob.isPending}
+              onClick={confirmDelete}
+              className="bg-[#B0212B] px-4 text-white hover:bg-[#8F1B23]"
+            >
+              {deleteJob.isPending ? "Deleting..." : "Delete Job"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

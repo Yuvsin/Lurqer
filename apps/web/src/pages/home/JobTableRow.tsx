@@ -69,14 +69,19 @@ export function JobTableRow({
 }: JobTableRowProps) {
   return (
     <TableRow className="hover:bg-[#FAF9F6]">
-      <TableCell className="font-medium text-[#131200]">{job.company}</TableCell>
-      <TableCell className="w-48 max-w-48 text-[#5B5750]">
+      <TableCell className="w-40 max-w-40 text-center font-medium text-[#131200]">
+        <span className="block truncate" title={job.company}>
+          {job.company}
+        </span>
+      </TableCell>
+      <TableCell className="w-48 max-w-48 text-center text-[#5B5750]">
         <span className="block truncate" title={job.title}>
           {job.title}
         </span>
       </TableCell>
-      <TableCell>
-        <DropdownMenu>
+      <TableCell className="text-center">
+        <div className="flex items-center justify-center">
+          <DropdownMenu>
           <DropdownMenuTrigger
             render={<Button variant="outline" size="sm" />}
             disabled={actionsDisabled}
@@ -119,25 +124,32 @@ export function JobTableRow({
               })}
             </DropdownMenuGroup>
           </DropdownMenuContent>
-        </DropdownMenu>
+          </DropdownMenu>
+        </div>
         {isUpdating && <span className="sr-only">Updating status</span>}
       </TableCell>
-      <TableCell className="text-[#5B5750]">{job.platform}</TableCell>
-      <TableCell className="text-[#5B5750]">{job.date}</TableCell>
-      <TableCell><RiskBadge riskLevel={job.riskLevel} /></TableCell>
-      <TableCell className="text-right">
-        <Button
-          type="button"
-          variant="destructive"
-          size="icon-sm"
-          disabled={actionsDisabled}
-          onClick={() => onDelete(job)}
-          aria-label={`Delete ${job.title} at ${job.company}`}
-          title={`Delete ${job.title} at ${job.company}`}
-        >
-          <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-          {isDeleting && <span className="sr-only">Deleting</span>}
-        </Button>
+      <TableCell className="text-center text-[#5B5750]">{job.platform}</TableCell>
+      <TableCell className="text-center text-[#5B5750]">{job.date}</TableCell>
+      <TableCell className="text-center">
+        <div className="flex items-center justify-center">
+          <RiskBadge riskLevel={job.riskLevel} />
+        </div>
+      </TableCell>
+      <TableCell className="text-center">
+        <div className="flex items-center justify-center">
+          <Button
+            type="button"
+            variant="destructive"
+            size="icon-sm"
+            disabled={actionsDisabled}
+            onClick={() => onDelete(job)}
+            aria-label={`Delete ${job.title} at ${job.company}`}
+            title={`Delete ${job.title} at ${job.company}`}
+          >
+            <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+            {isDeleting && <span className="sr-only">Deleting</span>}
+          </Button>
+        </div>
       </TableCell>
     </TableRow>
   );

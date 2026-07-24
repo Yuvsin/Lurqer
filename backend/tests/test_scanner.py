@@ -154,6 +154,130 @@ class ScannerTests(unittest.TestCase):
         self.assertEqual(result.overall_score, 100)
         self.assertTrue(all(0 <= score <= 100 for score in vars(result.category_scores).values()))
 
+    def test_gift_card_compensation_is_high_confidence_scam(self) -> None:
+        result = self.scan("Payment over gift cards will be used for this role.")
+        finding = next(item for item in result.findings if item.rule_id == "SEC_GIFT_CARD_PAYMENT")
+        self.assertEqual((finding.score_impact, result.risk_level), (50, "Medium"))
+
+    def test_salary_paid_through_gift_cards_scores_fifty(self) -> None:
+        result = self.scan("Your salary will be paid through gift cards.")
+        finding = next(item for item in result.findings if item.rule_id == "SEC_GIFT_CARD_PAYMENT")
+        self.assertEqual(finding.score_impact, 50)
+
+    def test_applicant_must_buy_gift_cards_scores_seventy(self) -> None:
+        result = self.scan("The applicant must buy gift cards during onboarding.")
+        finding = next(item for item in result.findings if item.rule_id == "SEC_GIFT_CARD_PAYMENT")
+        self.assertEqual(finding.score_impact, 70)
+
+    def test_applicant_must_send_gift_card_codes_scores_seventy(self) -> None:
+        result = self.scan("You must send the gift-card codes and PINs to the recruiter.")
+        finding = next(item for item in result.findings if item.rule_id == "SEC_GIFT_CARD_PAYMENT")
+        self.assertEqual(finding.score_impact, 70)
+
+    def test_required_gift_card_purchase_and_reimbursement_uses_strongest_weight(self) -> None:
+        result = self.scan("A required gift-card purchase will be reimbursed after onboarding.")
+        finding = next(item for item in result.findings if item.rule_id == "SEC_GIFT_CARD_PAYMENT")
+        self.assertEqual(finding.score_impact, 70)
+
+    def test_gift_card_transfer_instruction_emits_one_finding(self) -> None:
+        result = self.scan(
+            "You must buy gift cards, photograph them, and send us the gift-card codes and PINs. "
+            "Your payment will be reimbursed with gift cards."
+        )
+        findings = [item for item in result.findings if item.rule_id == "SEC_GIFT_CARD_PAYMENT"]
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].score_impact, 70)
+        self.assertNotIn("SEC_UPFRONT_PAYMENT", self.rule_ids(result))
+
+    def test_legitimate_gift_card_references_do_not_trigger(self) -> None:
+        examples = (
+            "Retail associates sell gift cards, organize inventory, and help customers at checkout.",
+            "Contact customer support for help with gift card balances.",
+            "Employees may receive an optional gift card bonus during the holidays.",
+            "Fraud prevention training explains that we will never request gift cards or their PINs.",
+        )
+        for description in examples:
+            with self.subTest(description=description):
+                self.assertNotIn("SEC_GIFT_CARD_PAYMENT", self.rule_ids(self.scan(description)))
+
+    def test_broader_immediate_offer_language(self) -> None:
+        examples = (
+            "This position is guaranteed after applying.",
+            "Your job application will be automatically approved.",
+            "We provide a job guarantee after application.",
+        )
+        for description in examples:
+            with self.subTest(description=description):
+                self.assertIn("SEC_IMMEDIATE_OFFER", self.rule_ids(self.scan(description)))
+
+    def test_immediate_offer_exclusions_remain_clean(self) -> None:
+        examples = (
+            "Qualified applicants receive a guaranteed interview.",
+            "All applicants receive guaranteed consideration.",
+            "Employment is not guaranteed after applying.",
+            "The guaranteed minimum salary is listed below.",
+        )
+        for description in examples:
+            with self.subTest(description=description):
+                self.assertNotIn("SEC_IMMEDIATE_OFFER", self.rule_ids(self.scan(description)))
+
+    def test_broader_urgency_language(self) -> None:
+        examples = (
+            "You must be ready to interview immediately.",
+            "Respond immediately to secure your position.",
+            "Complete the interview immediately.",
+            "You will lose the position if you don't respond now.",
+        )
+        for description in examples:
+            with self.subTest(description=description):
+                finding = next(
+                    item
+                    for item in self.scan(description).findings
+                    if item.rule_id == "SEC_EXCESSIVE_URGENCY"
+                )
+                self.assertEqual(finding.score_impact, 3)
+
+    def test_legitimate_immediate_timing_does_not_trigger_urgency(self) -> None:
+        examples = (
+            "This is an immediate opening with a flexible start date.",
+            "Applications are reviewed immediately.",
+            "Immediate availability preferred.",
+            "Candidates available to start immediately are encouraged to apply.",
+        )
+        for description in examples:
+            with self.subTest(description=description):
+                self.assertNotIn("SEC_EXCESSIVE_URGENCY", self.rule_ids(self.scan(description)))
+
+    def test_confirmed_manual_fallback_example_scores_above_fifteen(self) -> None:
+        result = self.scan(
+            "Whatsapp interview, payment over gift cards. Must be ready to interview immediately. "
+            "Job guarantee after application.\n\nRequirements:\n"
+            "PostgreSQL, FastAPI, Python, TypeScript, Linux"
+        )
+        self.assertTrue(
+            {
+                "SEC_GIFT_CARD_PAYMENT",
+                "SEC_IMMEDIATE_OFFER",
+                "SEC_OFF_PLATFORM",
+                "SEC_EXCESSIVE_URGENCY",
+            }.issubset(self.rule_ids(result))
+        )
+        self.assertGreater(result.overall_score, 15)
+
+    def test_technical_requirements_do_not_add_findings(self) -> None:
+        result = self.scan(
+            "Responsibilities: build and maintain internal services.\n"
+            "Requirements: PostgreSQL, FastAPI, Python, TypeScript, Linux"
+        )
+        self.assertEqual(result.findings, [])
+
+    def test_gift_card_combination_still_caps_at_one_hundred(self) -> None:
+        result = self.scan(
+            "You must send gift-card PINs. Provide your SSN now. "
+            "Use your personal bank account to transfer company funds."
+        )
+        self.assertEqual(result.overall_score, 100)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,7 +1,11 @@
 import json
 import unittest
 
-from app.services.extractor import extract_job_posting
+from app.services.extractor import (
+    DescriptionExtractionError,
+    IncompleteMetadataDescriptionError,
+    extract_job_posting,
+)
 from app.services.url_security import normalize_url
 
 
@@ -9,6 +13,26 @@ DESCRIPTION = (
     "Work with the engineering team to build reliable software, review code, "
     "document technical decisions, and improve production systems. "
 ) * 2
+SHORT_METADATA_DESCRIPTION = " ".join(["brief"] * 21) + ("x" * 29)
+
+assert len(SHORT_METADATA_DESCRIPTION) == 154
+assert len(SHORT_METADATA_DESCRIPTION.split()) == 21
+
+
+def _metadata_html(description: str, container_description: str | None = None) -> str:
+    container = (
+        f'<div class="description__text">{container_description}</div>'
+        if container_description is not None
+        else ""
+    )
+    return (
+        "<html><head>"
+        '<meta property="og:title" content="Call Center Representative">'
+        '<meta name="company" content="Radiant Systems Inc">'
+        '<meta name="job-location" content="Remote">'
+        f'<meta name="description" content="{description}">'
+        f"</head><body>{container}</body></html>"
+    )
 
 
 def _linkedin_html(
@@ -38,6 +62,41 @@ def _linkedin_html(
 
 
 class LinkedInExtractionTests(unittest.TestCase):
+    def test_short_linkedin_metadata_description_is_rejected(self) -> None:
+        with self.assertRaises(IncompleteMetadataDescriptionError):
+            extract_job_posting(
+                _metadata_html(SHORT_METADATA_DESCRIPTION),
+                "https://www.linkedin.com/jobs/view/4261234567",
+            )
+
+    def test_substantial_metadata_description_can_proceed(self) -> None:
+        description = " ".join(["responsibility"] * 60)
+        posting = extract_job_posting(
+            _metadata_html(description),
+            "https://www.linkedin.com/jobs/view/4261234567",
+        )
+
+        self.assertGreaterEqual(len(description), 400)
+        self.assertEqual(posting.extraction_method, "metadata")
+        self.assertEqual(posting.description, description)
+
+    def test_job_container_takes_priority_over_short_metadata(self) -> None:
+        posting = extract_job_posting(
+            _metadata_html(SHORT_METADATA_DESCRIPTION, DESCRIPTION),
+            "https://www.linkedin.com/jobs/view/4261234567",
+        )
+
+        self.assertEqual(posting.extraction_method, "job_description_container")
+        self.assertEqual(posting.description, DESCRIPTION.strip())
+
+    def test_login_or_access_wall_remains_rejected(self) -> None:
+        blocked = "Access denied. Verify you are human before you sign in. " * 5
+        with self.assertRaises(DescriptionExtractionError):
+            extract_job_posting(
+                _metadata_html(blocked),
+                "https://www.linkedin.com/jobs/view/4261234567",
+            )
+
     def test_collection_url_normalizes_to_job_view_url(self) -> None:
         normalized = normalize_url(
             "https://www.linkedin.com/jobs/collections/recommended/"

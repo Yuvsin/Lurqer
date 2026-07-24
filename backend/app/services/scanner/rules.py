@@ -60,6 +60,12 @@ RULE_DEFINITIONS = {
         "The posting directs recruiting communication to an informal messaging platform.",
         "Verify the recruiter through the employer's official domain before moving the conversation.",
     ),
+    "SEC_GIFT_CARD_PAYMENT": RuleDefinition(
+        "SEC_GIFT_CARD_PAYMENT", "scam", "High", "High",
+        "Gift-card payment or transfer request", 50,
+        "Legitimate employers do not use gift cards for wages, hiring fees, equipment purchases, verification, or fund transfers.",
+        "Do not buy, send, or disclose gift cards or their codes. Verify the role through the employer's official careers site.",
+    ),
     "SEC_UPFRONT_PAYMENT": RuleDefinition(
         "SEC_UPFRONT_PAYMENT", "scam", "High", "High",
         "Applicant payment required", 50,
@@ -227,9 +233,35 @@ def detect_unrealistic_compensation(data: JobScanInput) -> Finding | None:
 
 def detect_immediate_offer(data: JobScanInput) -> Finding | None:
     text = _description(data)
+    match = _match(
+        text,
+        r"\b(?:"
+        r"guaranteed (?:hire|hiring|job|offer|position|employment)"
+        r"|(?:job|position|employment) (?:is )?guaranteed(?: after (?:applying|application))?"
+        r"|job guarantee after (?:applying|application)"
+        r"|hired immediately"
+        r"|immediate acceptance"
+        r"|automatic(?:ally)? (?:accepted|acceptance|approved|approval) (?:for|of) (?:the |your )?(?:job|position|application)"
+        r"|(?:job|application) (?:is |will be )?automatic(?:ally)? (?:accepted|approved)"
+        r"|offer (?:without|no) (?:an? )?interview"
+        r"|no interview (?:needed|required)"
+        r"|everyone (?:is|will be) accepted"
+        r")\b",
+    )
+    if match is None:
+        return None
+
+    context = text[max(0, match.start() - 35):min(len(text), match.end() + 35)]
+    if _match(
+        context,
+        r"\b(?:not guaranteed|guaranteed (?:interview|consideration|minimum salary)|legal (?:policy|requirement))\b",
+    ):
+        return None
+
     return _finding(
-        "SEC_IMMEDIATE_OFFER", text,
-        _match(text, r"\b(?:guaranteed (?:hire|hiring|job|offer)|hired immediately|immediate acceptance|offer (?:without|no) (?:an? )?interview|no interview (?:needed|required)|everyone (?:is|will be) accepted)\b"),
+        "SEC_IMMEDIATE_OFFER",
+        text,
+        match,
     )
 
 
@@ -246,12 +278,66 @@ def detect_off_platform_communication(data: JobScanInput) -> Finding | None:
     return _finding("SEC_OFF_PLATFORM", text, match, score_impact=points)
 
 
+def detect_gift_card_payment(data: JobScanInput) -> Finding | None:
+    text = _description(data)
+
+    direct_match = _match(
+        text,
+        r"(?:"
+        r"\b(?:you|applicant|candidate|new hire)\b.{0,55}\b(?:buy|purchase|send|transfer|photograph|share|disclose|provide)\b.{0,55}\bgift[- ]cards?\b"
+        r"|(?:^|[.!?\n]\s*|\b(?:must|need to|required to|instructed to|please|will)\s+)"
+        r"(?:buy|purchase|send|transfer|photograph|share|disclose|provide)\b.{0,55}\bgift[- ]cards?\b"
+        r"|\b(?:required|must|need to)\b.{0,40}\bgift[- ]card (?:purchase|payment)\b"
+        r"|\bgift[- ]cards?\b.{0,45}\b(?:codes?|pins?)\b.{0,35}\b(?:send|share|photograph|disclose|provide|text|email)\b"
+        r"|\b(?:send|share|photograph|disclose|provide|text|email)\b.{0,35}\bgift[- ]card\b.{0,25}\b(?:codes?|pins?)\b"
+        r")",
+    )
+    if direct_match is not None:
+        context = text[max(0, direct_match.start() - 45):min(len(text), direct_match.end() + 45)]
+        negated = _match(
+            context,
+            r"\b(?:never|do not|don't|will not|won't)\b.{0,45}\b(?:buy|purchase|send|transfer|request|ask for|share|disclose|provide)\b.{0,55}\bgift[- ]cards?\b",
+        )
+        benign_role = _match(
+            context,
+            r"\b(?:retail|inventory|cashier|customer (?:service|support)|fraud prevention|scam (?:awareness|education|warning))\b",
+        )
+        if not negated and not benign_role:
+            return _finding(
+                "SEC_GIFT_CARD_PAYMENT",
+                text,
+                direct_match,
+                score_impact=70,
+            )
+
+    payment_match = _match(
+        text,
+        r"(?:"
+        r"\b(?:compensation|payment|paid|paycheck|salary|wages|reimbursement|job funds|company funds|hiring funds)\b.{0,65}\bgift[- ]cards?\b"
+        r"|\bgift[- ]cards?\b.{0,65}\b(?:compensation|payment|paid|paycheck|salary|wages|reimbursement|job funds|company funds|hiring funds)\b"
+        r")",
+    )
+    if payment_match is None:
+        return None
+
+    context = text[max(0, payment_match.start() - 65):min(len(text), payment_match.end() + 65)]
+    benign_context = _match(
+        context,
+        r"\b(?:"
+        r"retail|inventory|stock(?:ing)?|cashier|customer (?:service|support)|sell(?:ing|s)? gift[- ]cards?"
+        r"|optional.{0,25}(?:reward|bonus)|(?:reward|bonus).{0,25}optional"
+        r"|fraud prevention|scam (?:awareness|education|warning)"
+        r"|never|do not|don't|will not|won't"
+        r")\b",
+    )
+    return None if benign_context else _finding("SEC_GIFT_CARD_PAYMENT", text, payment_match)
+
+
 def detect_upfront_payment(data: JobScanInput) -> Finding | None:
     text = _description(data)
     paid_training = r"(?:pay|fee|cost|purchase).{0,45}(?:required |mandatory )?(?:training|certification)|(?:training|certification).{0,45}(?:fee|paid to (?:us|the recruiter)|you must pay)"
     fees = r"\b(?:application|placement|onboarding|registration|processing) (?:fee|deposit)\b|\bequipment deposit\b"
-    gift_cards = r"\b(?:buy|purchase|send).{0,45}gift cards?\b"
-    match = _match(text, f"(?:{fees}|{paid_training}|{gift_cards})")
+    match = _match(text, f"(?:{fees}|{paid_training})")
     if match and _match(match.group(0), r"\b(?:employer|company|we) (?:provides?|offers?) paid training\b"):
         return None
     return _finding("SEC_UPFRONT_PAYMENT", text, match)
@@ -332,9 +418,34 @@ def detect_shortened_link(data: JobScanInput) -> Finding | None:
 
 def detect_excessive_urgency(data: JobScanInput) -> Finding | None:
     text = _description(data)
+    match = _match(
+        text,
+        r"\b(?:"
+        r"respond within (?:an|one|\d+) hour"
+        r"|limited slots?,? act now"
+        r"|immediate approval required"
+        r"|failure to respond.{0,45}(?:lose|forfeit) (?:the|your) position"
+        r"|respond immediately.{0,45}(?:secure|keep) (?:the|your|this) position"
+        r"|respond immediately or.{0,40}(?:lose|forfeit)"
+        r"|(?:must be |be |are )?ready to interview immediately"
+        r"|(?:must |need to )?complete (?:the |your )?interview immediately"
+        r"|(?:lose|forfeit) (?:the|your) position if (?:you )?(?:do not|don't) respond (?:right )?now"
+        r")\b",
+    )
+    if match is None:
+        return None
+
+    context = text[max(0, match.start() - 35):min(len(text), match.end() + 35)]
+    if _match(
+        context,
+        r"\b(?:immediate opening|immediate start date|applications? (?:are )?reviewed immediately|immediate availability preferred|available to start immediately)\b",
+    ):
+        return None
+
     return _finding(
-        "SEC_EXCESSIVE_URGENCY", text,
-        _match(text, r"\b(?:respond within (?:an|one|\d+) hour|limited slots?,? act now|immediate approval required|failure to respond.{0,45}(?:lose|forfeit) (?:the|your) position|respond immediately or.{0,40}(?:lose|forfeit))\b"),
+        "SEC_EXCESSIVE_URGENCY",
+        text,
+        match,
     )
 
 
@@ -421,6 +532,7 @@ RULES: tuple[RuleDetector, ...] = (
     detect_unrealistic_compensation,
     detect_immediate_offer,
     detect_off_platform_communication,
+    detect_gift_card_payment,
     detect_upfront_payment,
     detect_fake_check_equipment,
     detect_cryptocurrency_transfer,

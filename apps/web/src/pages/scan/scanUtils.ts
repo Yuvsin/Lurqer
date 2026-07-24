@@ -51,7 +51,9 @@ export function getScanError(error: unknown): ScanErrorInfo {
 
   if (requiresManualEntry) {
     return {
-      message: "Lurqer reached the page but could not extract a usable job description. Paste the posting below to scan it manually.",
+      message:
+        structuredDetail.message ??
+        "Lurqer reached the page but could not extract a usable job description. Paste the posting below to scan it manually.",
       requiresManualEntry: true,
     };
   }

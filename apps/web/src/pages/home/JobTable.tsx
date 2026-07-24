@@ -36,13 +36,13 @@ export function JobTable({
         <Table className="min-w-[760px]">
           <TableHeader>
             <TableRow className="bg-[#F2F0EC] hover:bg-[#F2F0EC]">
-              <TableHead className="text-[#5B5750] font-semibold">Company</TableHead>
-              <TableHead className="text-[#5B5750] font-semibold">Title</TableHead>
-              <TableHead className="text-[#5B5750] font-semibold">Status</TableHead>
-              <TableHead className="text-[#5B5750] font-semibold">Platform</TableHead>
-              <TableHead className="text-[#5B5750] font-semibold">Date</TableHead>
-              <TableHead className="text-[#5B5750] font-semibold">Risk</TableHead>
-              <TableHead className="text-right text-[#5B5750] font-semibold">Actions</TableHead>
+              <TableHead className="text-center text-[#5B5750] font-semibold">Company</TableHead>
+              <TableHead className="text-center text-[#5B5750] font-semibold">Title</TableHead>
+              <TableHead className="text-center text-[#5B5750] font-semibold">Status</TableHead>
+              <TableHead className="text-center text-[#5B5750] font-semibold">Platform</TableHead>
+              <TableHead className="text-center text-[#5B5750] font-semibold">Date</TableHead>
+              <TableHead className="text-center text-[#5B5750] font-semibold">Risk</TableHead>
+              <TableHead className="text-center text-[#5B5750] font-semibold">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

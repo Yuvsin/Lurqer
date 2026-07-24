@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import re
 from datetime import date
 from hashlib import sha256
 from urllib.parse import urlsplit
@@ -23,7 +25,12 @@ from app.schemas.job import (
     PostingContext,
 )
 from app.schemas.scan import ScanResponse, ScanTextRequest, ScanUrlRequest
-from app.services.extractor import ExtractionError, ExtractedJobPosting, extract_job_posting
+from app.services.extractor import (
+    ExtractionError,
+    ExtractedJobPosting,
+    IncompleteMetadataDescriptionError,
+    extract_job_posting,
+)
 from app.services.posting_history import PostingHistory, derive_posting_history
 from app.services.scanner import ScanResult, scan_job_posting
 from app.services.url_security import (
@@ -37,12 +44,61 @@ from app.services.url_security import (
     validate_url,
 )
 
+logger = logging.getLogger("uvicorn.error")
+
 router = APIRouter(
     prefix="/scan",
     tags=["Scans"],
 )
 
 MAX_SOURCE_URL_LENGTH = 2048
+
+DIAGNOSTIC_PHRASES = (
+    ("no_interview", "no interview"),
+    ("no_interview_required", "no interview required"),
+    ("immediate_start", "immediate start"),
+    ("direct_offer", "direct offer"),
+    ("commission_only", "commission only"),
+    ("no_base_salary", "no base salary"),
+    ("start_immediately", "start immediately"),
+    ("start_asap", "start asap"),
+)
+LINKEDIN_AUTHWALL_MARKERS = (
+    "sign in",
+    "join linkedin",
+    "agree & join linkedin",
+    "authwall",
+    "security verification",
+    "login",
+)
+EMAIL_ADDRESS_PATTERN = re.compile(
+    r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
+    re.IGNORECASE,
+)
+
+
+def _build_extraction_diagnostics(description: str) -> dict[str, object]:
+    lowered = description.casefold()
+    diagnostics: dict[str, object] = {
+        "description_length": len(description),
+        "word_count": len(description.split()),
+        "possible_authwall": any(
+            marker in lowered for marker in LINKEDIN_AUTHWALL_MARKERS
+        ),
+    }
+    diagnostics.update(
+        {
+            key: phrase in lowered
+            for key, phrase in DIAGNOSTIC_PHRASES
+        }
+    )
+    return diagnostics
+
+
+def _safe_diagnostic_label(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return EMAIL_ADDRESS_PATTERN.sub("[redacted email]", value)
 
 
 def _http_error(status_code: int, code: str, message: str) -> HTTPException:
@@ -342,6 +398,25 @@ def scan_url(
 
     try:
         posting: ExtractedJobPosting = extract_job_posting(html, final_url)
+    except IncompleteMetadataDescriptionError as error:
+        is_linkedin = error.source_site == "linkedin.com" or error.source_site.endswith(
+            ".linkedin.com"
+        )
+        message = (
+            "LinkedIn did not provide enough posting content for an accurate scan. "
+            "Paste the job description to continue."
+            if is_linkedin
+            else "The site did not provide enough posting content for an accurate scan. "
+            "Paste the job description to continue."
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "extraction_failed",
+                "message": message,
+                "manualEntryRequired": True,
+            },
+        ) from error
     except ExtractionError as error:
         raise HTTPException(
             status_code=422,
@@ -351,6 +426,31 @@ def scan_url(
                 "manualEntryRequired": True,
             },
         ) from error
+
+    # Temporary development diagnostics for verifying extractor completeness.
+    diagnostic = _build_extraction_diagnostics(posting.description)
+    logger.info(
+        "Extraction diagnostic: domain=%s method=%s title=%r company=%r "
+        "description_length=%d word_count=%d no_interview=%s "
+        "no_interview_required=%s immediate_start=%s direct_offer=%s "
+        "commission_only=%s no_base_salary=%s start_immediately=%s "
+        "start_asap=%s possible_authwall=%s",
+        posting.source_site,
+        posting.extraction_method,
+        _safe_diagnostic_label(posting.title),
+        _safe_diagnostic_label(posting.company),
+        diagnostic["description_length"],
+        diagnostic["word_count"],
+        diagnostic["no_interview"],
+        diagnostic["no_interview_required"],
+        diagnostic["immediate_start"],
+        diagnostic["direct_offer"],
+        diagnostic["commission_only"],
+        diagnostic["no_base_salary"],
+        diagnostic["start_immediately"],
+        diagnostic["start_asap"],
+        diagnostic["possible_authwall"],
+    )
 
     result = _scan(
         title=posting.title,

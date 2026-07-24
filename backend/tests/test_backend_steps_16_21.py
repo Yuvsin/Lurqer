@@ -36,6 +36,19 @@ SCAM_DESCRIPTION = (
     "for mobile deposit so you can purchase a laptop and other equipment."
 )
 
+SHORT_LINKEDIN_METADATA = " ".join(["brief"] * 21) + ("x" * 29)
+
+
+def _short_linkedin_metadata_html() -> str:
+    return (
+        "<html><head>"
+        '<meta property="og:title" content="Call Center Representative">'
+        '<meta name="company" content="Radiant Systems Inc">'
+        '<meta name="job-location" content="Remote">'
+        f'<meta name="description" content="{SHORT_LINKEDIN_METADATA}">'
+        "</head><body></body></html>"
+    )
+
 
 def _job_html(description: str) -> str:
     posting = {
@@ -170,6 +183,35 @@ class BackendSteps16To21Tests(unittest.TestCase):
         self.assertEqual(history.status_code, 200)
         self.assertEqual(len(history.json()), 2)
         self.assertEqual(history.json()[0]["id"], second.json()["reportId"])
+
+    @patch("app.routers.scans._scan")
+    @patch("app.routers.scans.fetch_safe_html")
+    @patch("app.routers.scans.validate_url", return_value=None)
+    def test_incomplete_linkedin_metadata_stops_before_scan_and_persistence(
+        self,
+        validate_url_mock,
+        fetch_safe_html,
+        scan_mock,
+    ) -> None:
+        fetch_safe_html.return_value = _short_linkedin_metadata_html()
+
+        response = self.client.post(
+            "/scan/url",
+            json={"url": "https://www.linkedin.com/jobs/view/4261234567"},
+        )
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "extraction_failed")
+        self.assertTrue(response.json()["detail"]["manualEntryRequired"])
+        self.assertEqual(
+            response.json()["detail"]["message"],
+            "LinkedIn did not provide enough posting content for an accurate scan. "
+            "Paste the job description to continue.",
+        )
+        scan_mock.assert_not_called()
+        with Session(self.engine) as session:
+            self.assertEqual(len(session.exec(select(Job)).all()), 0)
+            self.assertEqual(len(session.exec(select(Report)).all()), 0)
 
     @patch("app.routers.scans.fetch_safe_html")
     def test_text_scans_do_not_fetch_and_do_not_merge_unrelated_posts(

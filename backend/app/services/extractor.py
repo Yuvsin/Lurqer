@@ -11,6 +11,8 @@ from urllib.parse import urlsplit
 from bs4 import BeautifulSoup, Tag
 
 MIN_DESCRIPTION_CHARACTERS = 120
+MIN_METADATA_DESCRIPTION_CHARACTERS = 400
+MIN_METADATA_DESCRIPTION_WORDS = 60
 
 DESCRIPTION_SELECTORS = (
     '[itemprop="description"]',
@@ -72,6 +74,14 @@ class InvalidSourceURLError(ExtractionError):
 
 class DescriptionExtractionError(ExtractionError):
     """No usable job description could be extracted."""
+
+
+class IncompleteMetadataDescriptionError(DescriptionExtractionError):
+    """Only a short metadata summary was available for the posting."""
+
+    def __init__(self, source_site: str) -> None:
+        super().__init__("Metadata did not contain a complete job description")
+        self.source_site = source_site
 
 
 @dataclass(frozen=True)
@@ -349,6 +359,15 @@ def _is_usable_description(description: str | None) -> bool:
     )
 
 
+def _is_complete_metadata_description(description: str | None) -> bool:
+    if description is None:
+        return False
+    return (
+        len(description) >= MIN_METADATA_DESCRIPTION_CHARACTERS
+        and len(description.split()) >= MIN_METADATA_DESCRIPTION_WORDS
+    )
+
+
 def _first_container_description(soup: BeautifulSoup) -> str | None:
     for selector in DESCRIPTION_SELECTORS:
         description = _element_text(soup.select_one(selector))
@@ -429,15 +448,32 @@ def extract_job_posting(html: str, source_url: str) -> ExtractedJobPosting:
 
     description = structured.description
     method = structured.extraction_method
+    incomplete_metadata = (
+        _is_usable_description(metadata.description)
+        and not _is_complete_metadata_description(metadata.description)
+    )
     if not _is_usable_description(description):
-        description = metadata.description
-        method = metadata.extraction_method
+        if _is_complete_metadata_description(metadata.description):
+            description = metadata.description
+            method = metadata.extraction_method
+        else:
+            description = None
+            method = None
     if not _is_usable_description(description):
         description = _first_container_description(soup)
         method = "job_description_container" if description else None
+    if (
+        not _is_usable_description(description)
+        and incomplete_metadata
+        and _is_linkedin_site(source_site)
+    ):
+        raise IncompleteMetadataDescriptionError(source_site)
     if not _is_usable_description(description):
         description = _generic_description(soup)
         method = "main_content" if description else None
+
+    if not _is_usable_description(description) and incomplete_metadata:
+        raise IncompleteMetadataDescriptionError(source_site)
 
     if not description or not method:
         raise DescriptionExtractionError(
